@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <title>AviTube</title>
+    <!-- GunDB Relay Platform -->
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+    
+    <!-- Firebase Core and Cloud Storage Production SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -587,9 +593,21 @@
         ]);
         const globalDatabaseMatrix = networkRelay.get('avitube_universal_matrix_v5');
 
-        let dbInstance = null;
+        // Web app's Firebase Configuration Integration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDlfYzYRkpAVzvVuq4245e-d0FKbkLFS-Q",
+            authDomain: "avitube.firebaseapp.com",
+            projectId: "avitube",
+            storageBucket: "avitube.firebasestorage.app",
+            messagingSenderId: "822005859804",
+            appId: "1:822005859804:web:c5196aab4c514278707b19"
+        };
+
+        // Fire up Firebase Storage context
+        firebase.initializeApp(firebaseConfig);
+        const cloudStorageInstance = firebase.storage();
+
         let automaticWatchDirHandle = null;
-        let activeObjectURLs = [];
 
         const INITIAL_LEGACY_STATE = {
             videos: [],
@@ -610,16 +628,8 @@
         let stagedSingleFiles = [];
         let stagedBulkFiles = [];
 
-        const dbRequest = indexedDB.open("AviTubeUniversalStorage", 5);
-        dbRequest.onupgradeneeded = function(event) {
-            let db = event.target.result;
-            if (!db.objectStoreNames.contains("platform_state")) db.createObjectStore("platform_state");
-            if (!db.objectStoreNames.contains("raw_video_binary_blobs")) db.createObjectStore("raw_video_binary_blobs");
-        };
-        dbRequest.onsuccess = function(event) {
-            dbInstance = event.target.result;
-            initializeGlobalSyncLayers();
-        };
+        // Instantly verify network alignment on script evaluation load
+        initializeGlobalSyncLayers();
 
         function initializeGlobalSyncLayers() {
             globalDatabaseMatrix.get('app_state_json').on(function(data) {
@@ -643,27 +653,20 @@
 
         function saveStateToDatabase() {
             globalDatabaseMatrix.get('app_state_json').put({ payload: JSON.stringify(appState) });
-
-            if (!dbInstance) return;
-            const transaction = dbInstance.transaction(["platform_state"], "readwrite");
-            const store = transaction.objectStore("platform_state");
-            store.put(JSON.parse(JSON.stringify(appState)), "application_data_matrix");
         }
 
-        function removeRawVideoBlobFromDB(id) {
-            if (!dbInstance) return;
-            const transaction = dbInstance.transaction(["raw_video_binary_blobs"], "readwrite");
-            const store = transaction.objectStore("raw_video_binary_blobs");
-            store.delete(id);
+        async function uploadVideoBinaryToFirebase(id, fileBlob) {
+            const fileReference = cloudStorageInstance.ref().child('media_assets/' + id + '_' + fileBlob.name);
+            const uploadSnapshot = await fileReference.put(fileBlob);
+            const globalDownloadURL = await uploadSnapshot.ref.getDownloadURL();
+            return globalDownloadURL;
         }
 
-        function getRawVideoBlobFromDB(id, callback) {
-            if (!dbInstance) return callback(null);
-            const transaction = dbInstance.transaction(["raw_video_binary_blobs"], "readonly");
-            const store = transaction.objectStore("raw_video_binary_blobs");
-            const request = store.get(id);
-            request.onsuccess = function() { callback(request.result || null); };
-            request.onerror = function() { callback(null); };
+        async function removeVideoBinaryFromFirebase(fileUrl) {
+            try {
+                const fileReference = cloudStorageInstance.refFromURL(fileUrl);
+                await fileReference.delete();
+            } catch(e) { console.warn("Firebase file asset removal bypassed or missing", e); }
         }
 
         function showAuthError(message) {
@@ -854,7 +857,7 @@
             }
         }
 
-        function processSingleUpload() {
+        async function processSingleUpload() {
             if (!currentUser || stagedSingleFiles.length === 0) return;
             const file = stagedSingleFiles[0];
             const customTitle = document.getElementById('singleTitle').value.trim();
@@ -866,57 +869,18 @@
                 return;
             }
 
-            scanFileHeaderSecurity(file, function(isSafeFile) {
-                storeRawVideoBinaryInDB(generatedId, file);
-                appState.videos.unshift({
-                    id: generatedId,
-                    title: customTitle || file.name.replace(/\.[^/.]+$/, ""),
-                    fileName: file.name,
-                    description: desc,
-                    uploadTime: new Date().toLocaleString(),
-                    creator: currentUser,
-                    views: 0,
-                    isMalwareFlagged: !isSafeFile,
-                    fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
-                    likedBy: [], dislikedBy: [], comments: []
-                });
-                saveStateToDatabase();
+            document.getElementById('singleDropLabel').innerText = "Uploading to Cloud Pipeline...";
 
-                stagedSingleFiles = [];
-                document.getElementById('singleTitle').value = '';
-                document.getElementById('singleDesc').value = '';
-                document.getElementById('singleDropLabel').innerText = "Drop Video or Soundfile Here or Click";
-                showHomePage();
-            });
-        }
-
-        function storeRawVideoBinaryInDB(id, fileBlob) {
-            if (!dbInstance) return;
-            const transaction = dbInstance.transaction(["raw_video_binary_blobs"], "readwrite");
-            const store = transaction.objectStore("raw_video_binary_blobs");
-            store.put(fileBlob, id);
-        }
-
-        function processBulkUpload() {
-            if (!currentUser || stagedBulkFiles.length === 0) return;
-            const defaultDesc = document.getElementById('bulkDesc').value.trim();
-            let processedCount = 0;
-
-            stagedBulkFiles.forEach(file => {
-                if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
-                    processedCount++;
-                    return;
-                }
-
-                const generatedId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-                
-                scanFileHeaderSecurity(file, function(isSafeFile) {
-                    storeRawVideoBinaryInDB(generatedId, file);
+            scanFileHeaderSecurity(file, async function(isSafeFile) {
+                try {
+                    const cloudAssetUrl = await uploadVideoBinaryToFirebase(generatedId, file);
+                    
                     appState.videos.unshift({
                         id: generatedId,
-                        title: file.name.replace(/\.[^/.]+$/, ""),
+                        title: customTitle || file.name.replace(/\.[^/.]+$/, ""),
                         fileName: file.name,
-                        description: defaultDesc,
+                        fileUrl: cloudAssetUrl,
+                        description: desc,
                         uploadTime: new Date().toLocaleString(),
                         creator: currentUser,
                         views: 0,
@@ -924,21 +888,67 @@
                         fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
                         likedBy: [], dislikedBy: [], comments: []
                     });
+                    saveStateToDatabase();
 
-                    processedCount++;
-                    if (processedCount === stagedBulkFiles.length) {
-                        saveStateToDatabase();
-                        stagedBulkFiles = [];
-                        document.getElementById('bulkDesc').value = '';
-                        document.getElementById('bulkDropLabel').innerText = "Drop Bulk Files Here";
-                        showHomePage();
-                    }
-                });
+                    stagedSingleFiles = [];
+                    document.getElementById('singleTitle').value = '';
+                    document.getElementById('singleDesc').value = '';
+                    document.getElementById('singleDropLabel').innerText = "Drop Video or Soundfile Here or Click";
+                    showHomePage();
+                } catch(err) {
+                    console.error(err);
+                    alert("Cloud asset sync failure. Check your Firebase Cloud storage security settings.");
+                    document.getElementById('singleDropLabel').innerText = "Sync Failed. Retrying Permitted.";
+                }
             });
         }
 
+        async function processBulkUpload() {
+            if (!currentUser || stagedBulkFiles.length === 0) return;
+            const defaultDesc = document.getElementById('bulkDesc').value.trim();
+            let totalToProcess = stagedBulkFiles.length;
+            document.getElementById('bulkDropLabel').innerText = `Syncing Batch (0/${totalToProcess})...`;
+
+            for (let i = 0; i < stagedBulkFiles.length; i++) {
+                const file = stagedBulkFiles[i];
+                if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+                    continue;
+                }
+
+                const generatedId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+                
+                await new Promise((resolve) => {
+                    scanFileHeaderSecurity(file, async function(isSafeFile) {
+                        try {
+                            const cloudAssetUrl = await uploadVideoBinaryToFirebase(generatedId, file);
+                            appState.videos.unshift({
+                                id: generatedId,
+                                title: file.name.replace(/\.[^/.]+$/, ""),
+                                fileName: file.name,
+                                fileUrl: cloudAssetUrl,
+                                description: defaultDesc,
+                                uploadTime: new Date().toLocaleString(),
+                                creator: currentUser,
+                                views: 0,
+                                isMalwareFlagged: !isSafeFile,
+                                fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
+                                likedBy: [], dislikedBy: [], comments: []
+                            });
+                        } catch(e) { console.error("Batch slot fail", e); }
+                        resolve();
+                    });
+                });
+                document.getElementById('bulkDropLabel').innerText = `Syncing Batch (${i+1}/${totalToProcess})...`;
+            }
+
+            saveStateToDatabase();
+            stagedBulkFiles = [];
+            document.getElementById('bulkDesc').value = '';
+            document.getElementById('bulkDropLabel').innerText = "Drop Bulk Files Here";
+            showHomePage();
+        }
+
         function showHomePage() {
-            clearActiveObjectURLs();
             document.getElementById('watchPage').classList.add('hidden');
             document.getElementById('channelPage').classList.add('hidden');
             document.getElementById('uploadPage').classList.add('hidden');
@@ -948,7 +958,6 @@
         }
 
         function showUploadPage() {
-            clearActiveObjectURLs();
             document.getElementById('watchPage').classList.add('hidden');
             document.getElementById('channelPage').classList.add('hidden');
             document.getElementById('aviersPage').classList.add('hidden');
@@ -957,18 +966,12 @@
         }
 
         function showAviersPage() {
-            clearActiveObjectURLs();
             document.getElementById('watchPage').classList.add('hidden');
             document.getElementById('channelPage').classList.add('hidden');
             document.getElementById('uploadPage').classList.add('hidden');
             document.getElementById('homePage').classList.add('hidden');
             document.getElementById('aviersPage').classList.remove('hidden');
             renderAviersGrid(document.getElementById('aviersSearchInput').value.toLowerCase().trim());
-        }
-
-        function clearActiveObjectURLs() {
-            activeObjectURLs.forEach(url => URL.revokeObjectURL(url));
-            activeObjectURLs = [];
         }
 
         function calculateNestedComments(arr) {
@@ -1091,74 +1094,70 @@
 
         function updatePlayerContainerHub() {
             const container = document.getElementById('playerDynamicContainer');
-            clearActiveObjectURLs();
             
             const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
             document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
 
-            getRawVideoBlobFromDB(currentVideo.id, function(blobFile) {
-                if (!blobFile) {
-                    container.innerHTML = `<div class="media-error-msg">CRITICAL CONTEXT ERROR: Binary asset object missing from local cache storage sandbox node. File display unavailable.</div>`;
-                    return;
-                }
+            if (!currentVideo.fileUrl) {
+                container.innerHTML = `<div class="media-error-msg">CRITICAL DATA FORMAT MISMATCH: This record targets legacy offline database tracks. Re-upload file to apply mesh configuration.</div>`;
+                return;
+            }
 
-                container.innerHTML = `
-                    <div style="text-align:center; padding:20px;">
-                        <p style="font-size:16px; margin-bottom:15px; font-weight:bold;">Local Device Execution Instructions Active</p>
-                        <button class="button active" style="padding:12px 24px; font-weight: bold;" onclick="executeDownloadAndStreamTrigger()">PLAY AND DOWNLOAD</button>
-                    </div>`;
-            });
+            if (currentVideo.fileType === 'audio') {
+                container.innerHTML = `<audio src="${currentVideo.fileUrl}" controls style="width:85%; background:#FAF9F6; padding:10px; border:1px solid #767676;"></audio>`;
+            } else {
+                container.innerHTML = `<video src="${currentVideo.fileUrl}" controls autoplay style="width:100%; height:100%;"></video>`;
+            }
         }
 
         async function executeDownloadAndStreamTrigger() {
-            getRawVideoBlobFromDB(currentVideo.id, async function(blobFile) {
-                if (!blobFile) {
-                    alert("Error: Cannot extract source stream download because local data node container is missing.");
-                    return;
-                }
+            if (!currentVideo || !currentVideo.fileUrl) {
+                alert("Error: Public sync path missing from target structural matrix.");
+                return;
+            }
 
-                if(!appState.downloads) appState.downloads = {};
-                if(!appState.downloads[currentUser]) appState.downloads[currentUser] = [];
-                if(!appState.downloads[currentUser].includes(currentVideo.fileName)) {
-                    appState.downloads[currentUser].push(currentVideo.fileName);
-                }
+            if(!appState.downloads) appState.downloads = {};
+            if(!appState.downloads[currentUser]) appState.downloads[currentUser] = [];
+            if(!appState.downloads[currentUser].includes(currentVideo.fileName)) {
+                appState.downloads[currentUser].push(currentVideo.fileName);
+            }
 
-                if(!appState.videoDownloadCounters) appState.videoDownloadCounters = {};
-                if(!appState.videoDownloadCounters[currentVideo.id]) appState.videoDownloadCounters[currentVideo.id] = [];
-                if(!appState.videoDownloadCounters[currentVideo.id].includes(currentUser)) {
-                    appState.videoDownloadCounters[currentVideo.id].push(currentUser);
-                }
+            if(!appState.videoDownloadCounters) appState.videoDownloadCounters = {};
+            if(!appState.videoDownloadCounters[currentVideo.id]) appState.videoDownloadCounters[currentVideo.id] = [];
+            if(!appState.videoDownloadCounters[currentVideo.id].includes(currentUser)) {
+                appState.videoDownloadCounters[currentVideo.id].push(currentUser);
+            }
 
-                if (automaticWatchDirHandle) {
-                    try {
-                        const fileHandle = await automaticWatchDirHandle.getFileHandle(currentVideo.fileName, { create: true });
-                        const writable = await fileHandle.createWritable();
-                        await writable.write(blobFile);
-                        await writable.close();
-                    } catch (e) { console.warn("Auto-write log failed", e); }
-                }
+            // Sync down context automatically via File System Access layout handles if enabled
+            if (automaticWatchDirHandle) {
+                try {
+                    const res = await fetch(currentVideo.fileUrl);
+                    const fileBlob = await res.blob();
+                    const fileHandle = await automaticWatchDirHandle.getFileHandle(currentVideo.fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(fileBlob);
+                    await writable.close();
+                } catch (e) { console.warn("Auto-write log down failed", e); }
+            }
 
-                saveStateToDatabase();
-                
-                const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
-                document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
+            saveStateToDatabase();
+            
+            const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
+            document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
 
-                // Handle regular anchor fallback downloand chain
-                const anchor = document.createElement('a');
-                const blobUrl = URL.createObjectURL(blobFile);
-                anchor.href = blobUrl;
-                anchor.download = currentVideo.fileName;
-                document.body.appendChild(anchor);
-                anchor.click();
-                document.body.removeChild(anchor);
+            // Public direct browser standard binary anchor download trigger fallback
+            const anchor = document.createElement('a');
+            anchor.href = currentVideo.fileUrl;
+            anchor.download = currentVideo.fileName;
+            anchor.target = "_blank";
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
 
-                // Instantly navigate to instructions page path
-                window.open(`player.html?title=${encodeURIComponent(currentVideo.title)}`, '_blank');
-            });
+            window.open(`player.html?title=${encodeURIComponent(currentVideo.title)}`, '_blank');
         }
 
         function showChannelPage(channelOwnerName) {
-            clearActiveObjectURLs();
             targetBrowsingChannel = channelOwnerName;
             document.getElementById('homePage').classList.add('hidden');
             document.getElementById('watchPage').classList.add('hidden');
@@ -1214,7 +1213,7 @@
                         </div>
                         <div id="ctrl_confirm_${video.id}" class="confirm-banner hidden" onclick="event.stopPropagation();">
                             <span>Are you sure?</span> 
-                            <button class="button danger-btn" style="padding:2px 6px; font-size:11px;" onclick="executeDeleteVideoRecord('${video.id}', event)">Yes</button>
+                            <button class="button danger-btn" style="padding:2px 6px; font-size:11px;" onclick="executeDeleteVideoRecord('${video.id}', '${video.fileUrl}', event)">Yes</button>
                             <button class="button" style="padding:2px 6px; font-size:11px;" onclick="cancelDeleteGui('${video.id}', event)">No</button>
                         </div>
                     `;
@@ -1250,12 +1249,12 @@
             document.getElementById(`ctrl_actions_${videoId}`).classList.remove('hidden');
         }
 
-        function executeDeleteVideoRecord(videoId, event) {
+        async function executeDeleteVideoRecord(videoId, fileUrl, event) {
             event.stopPropagation();
             appState.videos = appState.videos.filter(v => v.id !== videoId);
             if(appState.videoDownloadCounters[videoId]) delete appState.videoDownloadCounters[videoId];
             saveStateToDatabase();
-            removeRawVideoBlobFromDB(videoId);
+            if(fileUrl) { await removeVideoBinaryFromFirebase(fileUrl); }
             showChannelPage(targetBrowsingChannel);
         }
 
