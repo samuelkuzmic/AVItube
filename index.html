@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AviTube - Universal Asset Hub</title>
+    <title>AviTube</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <style>
         body {
@@ -134,7 +134,7 @@
         .button {
             background: #F0F0F0;
             color: #000000;
-            border: 1px solid #CCCCCC;
+            border: 1px solid #767676;
             padding: 5px 10px;
             font-size: 13px;
             cursor: pointer;
@@ -276,7 +276,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            max-width: 450px;
+            max-width: 550px;
             width: 90%;
         }
         .auth-modal-box {
@@ -318,17 +318,20 @@
         }
         .legacy-auth-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 8px;
         }
         .legacy-quick-btn {
             background: #FFFFFF;
             border: 1px solid #CCCCCC;
             padding: 8px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
             color: #0000FF;
             cursor: pointer;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
         }
         .legacy-quick-btn:hover {
             background: #0000FF;
@@ -359,10 +362,9 @@
             <div class="legacy-auth-box">
                 <div class="legacy-auth-title">Fast Pass Legacy Access</div>
                 <div class="legacy-auth-grid">
-                    <button class="legacy-quick-btn" onclick="directAuthBypass('admin')">admin</button>
-                    <button class="legacy-quick-btn" onclick="directAuthBypass('test')">test</button>
-                    <button class="legacy-quick-btn" onclick="directAuthBypass('moderator')">moderator</button>
-                    <button class="legacy-quick-btn" onclick="directAuthBypass('guest')">guest</button>
+                    <button class="legacy-quick-btn" title="AviMaster" onclick="directAuthBypass('AviMaster')">AviMaster</button>
+                    <button class="legacy-quick-btn" title="SkaterBoy07" onclick="directAuthBypass('SkaterBoy07')">SkaterBoy07</button>
+                    <button class="legacy-quick-btn" title="AlphaTester" onclick="directAuthBypass('AlphaTester')">AlphaTester</button>
                 </div>
             </div>
 
@@ -443,13 +445,13 @@
             </div>
 
             <div id="uploadPage" class="hidden">
-                <b>UPLOAD HUB (VIDEOS, SCREENSHOTS & PICTURES)</b>
+                <b>UPLOAD HUB (VIDEOS & SOUNDFILES ONLY)</b>
                 <hr style="border: 0; border-top: 1px solid #CCCCCC; margin: 10px 0;">
                 <div class="upload-row">
                     <div class="panel-box">
                         <div id="singleDropZone" class="drop-zone" onclick="document.getElementById('singleFileInput').click()">
-                            <p id="singleDropLabel">Drop Video or Picture File Here or Click</p>
-                            <input type="file" id="singleFileInput" class="hidden" onchange="handleFileSelection(this.files, 'single')">
+                            <p id="singleDropLabel">Drop Video or Soundfile Here or Click</p>
+                            <input type="file" id="singleFileInput" class="hidden" accept="video/*, audio/*" onchange="handleFileSelection(this.files, 'single')">
                         </div>
                         <div class="form-group">
                             <label>Title</label>
@@ -465,7 +467,7 @@
                     <div class="panel-box">
                         <div id="bulkDropZone" class="drop-zone" onclick="document.getElementById('bulkFilesInput').click()">
                             <p id="bulkDropLabel">Drop Bulk Files Here</p>
-                            <input type="file" id="bulkFilesInput" class="hidden" multiple onchange="handleFileSelection(this.files, 'bulk')">
+                            <input type="file" id="bulkFilesInput" class="hidden" multiple accept="video/*, audio/*" onchange="handleFileSelection(this.files, 'bulk')">
                         </div>
                         <div class="form-group">
                             <label>Default Bulk Description</label>
@@ -499,12 +501,12 @@
                         </div>
                         
                         <div>
-                            <button class="button" style="background:#008000; color:#FFFFFF; font-weight:bold;" onclick="executeDownloadAndStreamTrigger()">DOWNLOAD FILE SOURCE</button>
+                            <button class="button" style="background:#0000FF; color:#FFFFFF; font-weight:bold; padding: 8px 16px;" onclick="executeDownloadAndStreamTrigger()">PLAY AND DOWNLOAD</button>
                         </div>
 
                         <div>
                             <span style="font-size: 13px; font-weight: bold; color: #0000FF; cursor:pointer;" id="videoAuthorLink">--</span>
-                            <button id="watchPageSubBtn" class="button" style="background:#FFCCCC;" onclick="toggleChannelSubscriptionFromWatch()">Subscribe Aviers</button>
+                            <button id="watchPageSubBtn" class="button" style="background:#FFCCCC;" onclick="toggleChannelSubscriptionFromWatch()">Call Aviers</button>
                         </div>
                     </div>
 
@@ -531,7 +533,7 @@
                             <p id="channelJoinedDateDisplay" style="margin:0; font-size:12px; color:#666666;">Joined: --</p>
                         </div>
                     </div>
-                    <button id="channelActionSubBtn" class="button" style="background:#FFCCCC;" onclick="toggleChannelSubscriptionDynamic()">Subscribe</button>
+                    <button id="channelActionSubBtn" class="button" style="background:#FFCCCC;" onclick="toggleChannelSubscriptionDynamic()">Call Aviers</button>
                 </div>
 
                 <div class="profile-matrix-container">
@@ -579,7 +581,6 @@
     </div>
 
     <script>
-        // Init multi-peer global database system relay nodes
         const networkRelay = Gun([
             'https://gun-manhattan.herokuapp.com/gun',
             'https://gundb-relay.up.railway.app/gun'
@@ -592,12 +593,12 @@
 
         const INITIAL_LEGACY_STATE = {
             videos: [],
-            subscriptions: { "admin": [], "test": [], "moderator": [], "guest": [] },
+            subscriptions: { "AviMaster": [], "SkaterBoy07": [], "AlphaTester": [] },
             downloads: {},
             videoDownloadCounters: {},
-            registeredAviers: ["admin", "test", "moderator", "guest"],
-            joinDates: { "admin": "1/15/2024", "test": "2/22/2024", "moderator": "3/05/2024", "guest": "5/12/2024" },
-            passwords: { "admin": "admin123", "test": "test123", "moderator": "mod123", "guest": "guest123" }
+            registeredAviers: ["AviMaster", "SkaterBoy07", "AlphaTester"],
+            joinDates: { "AviMaster": "5/18/2026", "SkaterBoy07": "5/20/2026", "AlphaTester": "5/25/2026" },
+            passwords: { "AviMaster": "avi123", "SkaterBoy07": "skate123", "AlphaTester": "test123" }
         };
 
         let appState = JSON.parse(JSON.stringify(INITIAL_LEGACY_STATE));
@@ -609,7 +610,6 @@
         let stagedSingleFiles = [];
         let stagedBulkFiles = [];
 
-        // Setup Local DB fallback and media store
         const dbRequest = indexedDB.open("AviTubeUniversalStorage", 5);
         dbRequest.onupgradeneeded = function(event) {
             let db = event.target.result;
@@ -822,8 +822,8 @@
                     
                     const isExecutable = headerString.startsWith("4D5A") || headerString.startsWith("7F454C46") || file.name.endsWith('.exe') || file.name.endsWith('.bat') || file.name.endsWith('.scr');
                     const isVideoMedia = headerString.startsWith("00018") || headerString.startsWith("00014") || headerString.startsWith("1A45DFA3") || headerString.startsWith("464C56") || file.type.startsWith('video/');
-                    const isImageMedia = headerString.startsWith("89504E47") || headerString.startsWith("FFD8FF") || headerString.startsWith("47494638") || headerString.startsWith("52494646") || file.type.startsWith('image/');
-                    const isApprovedAssetClass = isVideoMedia || isImageMedia;
+                    const isAudioMedia = file.type.startsWith('audio/');
+                    const isApprovedAssetClass = isVideoMedia || isAudioMedia;
 
                     if (isExecutable || !isApprovedAssetClass) callback(false);
                     else callback(true);
@@ -833,14 +833,19 @@
         }
 
         function handleFileSelection(files, type) {
+            const file = files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+                alert("Security block: Only video files and soundfiles can be selected.");
+                return;
+            }
+
             if (type === 'single') {
-                const file = files[0];
-                if (file) {
-                    stagedSingleFiles = [file];
-                    document.getElementById('singleDropLabel').innerText = "Staged: " + file.name;
-                }
+                stagedSingleFiles = [file];
+                document.getElementById('singleDropLabel').innerText = "Staged: " + file.name;
             } else {
-                stagedBulkFiles = Array.from(files);
+                stagedBulkFiles = Array.from(files).filter(f => f.type.startsWith('video/') || f.type.startsWith('audio/'));
                 document.getElementById('bulkDropLabel').innerText = "Staged: " + stagedBulkFiles.length + " Files";
             }
         }
@@ -851,7 +856,11 @@
             const customTitle = document.getElementById('singleTitle').value.trim();
             const desc = document.getElementById('singleDesc').value.trim();
             const generatedId = 'vid_' + Date.now();
-            const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+
+            if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+                alert("Security exception: System parameters only permit video files and soundfiles.");
+                return;
+            }
 
             scanFileHeaderSecurity(file, function(isSafeFile) {
                 storeRawVideoBinaryInDB(generatedId, file);
@@ -864,7 +873,7 @@
                     creator: currentUser,
                     views: 0,
                     isMalwareFlagged: !isSafeFile,
-                    fileType: isImg ? 'image' : 'video',
+                    fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
                     likedBy: [], dislikedBy: [], comments: []
                 });
                 saveStateToDatabase();
@@ -872,7 +881,7 @@
                 stagedSingleFiles = [];
                 document.getElementById('singleTitle').value = '';
                 document.getElementById('singleDesc').value = '';
-                document.getElementById('singleDropLabel').innerText = "Drop Video or Picture Here or Click";
+                document.getElementById('singleDropLabel').innerText = "Drop Video or Soundfile Here or Click";
                 showHomePage();
             });
         }
@@ -890,8 +899,12 @@
             let processedCount = 0;
 
             stagedBulkFiles.forEach(file => {
+                if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+                    processedCount++;
+                    return;
+                }
+
                 const generatedId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-                const isImg = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
                 
                 scanFileHeaderSecurity(file, function(isSafeFile) {
                     storeRawVideoBinaryInDB(generatedId, file);
@@ -904,7 +917,7 @@
                         creator: currentUser,
                         views: 0,
                         isMalwareFlagged: !isSafeFile,
-                        fileType: isImg ? 'image' : 'video',
+                        fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
                         likedBy: [], dislikedBy: [], comments: []
                     });
 
@@ -975,7 +988,7 @@
                 const likes = video.likedBy ? video.likedBy.length : 0;
                 const dislikes = video.dislikedBy ? video.dislikedBy.length : 0;
                 const commentCount = video.comments ? calculateNestedComments(video.comments) : 0;
-                const typeLabel = (video.fileType === 'image') ? 'IMAGE' : 'VIDEO';
+                const typeLabel = video.fileType.toUpperCase();
 
                 const card = document.createElement('div');
                 card.className = 'video-card';
@@ -984,7 +997,7 @@
                 let badgeMarkup = video.isMalwareFlagged ? `<span style="color:#CC0000; font-weight:bold; font-size:10px; display:block; margin-top:2px;">FLAG: UNKNOWN APPLICATION</span>` : '';
 
                 card.innerHTML = `
-                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : (video.fileType === 'image' ? 'background:#E0FFE0; color:#008000;' : '')}">
+                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : ''}">
                         ${video.isMalwareFlagged ? 'SUSPECT' : typeLabel}
                     </div>
                     <div class="card-title">${escapeHTML(video.title)}</div>
@@ -1019,7 +1032,7 @@
                 const subBtnMarkup = (name !== currentUser) ? 
                     `<button class="button" style="margin-top:10px; background:${isSubbed ? '#F0F0F0' : '#FFCCCC'};" 
                         onclick="event.stopPropagation(); executeSubscriptionActionToggle('${name}'); renderAviersGrid('${filterQuery}');">
-                        ${isSubbed ? 'Subscribed' : 'Subscribe'}
+                        ${isSubbed ? 'Called Avier' : 'Call Avier'}
                      </button>` : `<div style="font-size:11px; margin-top:10px; color:#777777;">You</div>`;
 
                 card.innerHTML = `
@@ -1048,7 +1061,18 @@
             document.getElementById('mainVideoTitle').innerText = currentVideo.title;
             document.getElementById('videoUploadTime').innerText = currentVideo.uploadTime;
             document.getElementById('videoViewsDisplay').innerText = `${currentVideo.views} views`;
-            document.getElementById('mainVideoDesc').innerText = currentVideo.description || "";
+            
+            const descArea = document.getElementById('mainVideoDesc');
+            let rawDesc = currentVideo.description || "";
+            if (rawDesc.length > 250) {
+                let truncated = rawDesc.substring(0, 250) + "... ";
+                descArea.innerHTML = `${escapeHTML(truncated)}<span id="clickSeeResultsBtn" style="color:#0000FF; cursor:pointer; font-weight:bold; text-decoration:underline;">click to see results</span>`;
+                document.getElementById('clickSeeResultsBtn').onclick = () => {
+                    descArea.innerText = rawDesc;
+                };
+            } else {
+                descArea.innerText = rawDesc;
+            }
             
             const authorLink = document.getElementById('videoAuthorLink');
             authorLink.innerText = `@${currentVideo.creator}`;
@@ -1074,22 +1098,11 @@
                     return;
                 }
 
-                const objectURL = URL.createObjectURL(blobFile);
-                activeObjectURLs.push(objectURL);
-
-                if (currentVideo.fileType === 'image') {
-                    const imgElement = document.createElement('img');
-                    imgElement.src = objectURL;
-                    container.innerHTML = '';
-                    container.appendChild(imgElement);
-                } else {
-                    const videoElement = document.createElement('video');
-                    videoElement.src = objectURL;
-                    videoElement.controls = true;
-                    videoElement.autoplay = false;
-                    container.innerHTML = '';
-                    container.appendChild(videoElement);
-                }
+                container.innerHTML = `
+                    <div style="text-align:center; padding:20px;">
+                        <p style="font-size:16px; margin-bottom:15px; font-weight:bold;">Local Device Execution Instructions Active</p>
+                        <button class="button active" style="padding:12px 24px; font-weight: bold;" onclick="executeDownloadAndStreamTrigger()">PLAY AND DOWNLOAD</button>
+                    </div>`;
             });
         }
 
@@ -1126,12 +1139,17 @@
                 const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
                 document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
 
+                // Handle regular anchor fallback downloand chain
                 const anchor = document.createElement('a');
-                anchor.href = URL.createObjectURL(blobFile);
+                const blobUrl = URL.createObjectURL(blobFile);
+                anchor.href = blobUrl;
                 anchor.download = currentVideo.fileName;
                 document.body.appendChild(anchor);
                 anchor.click();
                 document.body.removeChild(anchor);
+
+                // Instantly navigate to instructions page path
+                window.open(`player.html?title=${encodeURIComponent(currentVideo.title)}`, '_blank');
             });
         }
 
@@ -1177,7 +1195,7 @@
                 const likes = video.likedBy ? video.likedBy.length : 0;
                 const dislikes = video.dislikedBy ? video.dislikedBy.length : 0;
                 const commentCount = video.comments ? calculateNestedComments(video.comments) : 0;
-                const typeLabel = (video.fileType === 'image') ? 'IMAGE' : 'VIDEO';
+                const typeLabel = video.fileType.toUpperCase();
 
                 const card = document.createElement('div');
                 card.className = 'video-card';
@@ -1201,7 +1219,7 @@
                 let badgeMarkup = video.isMalwareFlagged ? `<span style="color:#CC0000; font-weight:bold; font-size:10px; display:block; margin-top:2px;">FLAG: UNKNOWN APPLICATION</span>` : '';
 
                 card.innerHTML = `
-                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : (video.fileType === 'image' ? 'background:#E0FFE0; color:#008000;' : '')}">
+                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : ''}">
                         ${video.isMalwareFlagged ? 'SUSPECT' : typeLabel}
                     </div>
                     <div class="card-title">${escapeHTML(video.title)}</div>
@@ -1270,7 +1288,7 @@
             
             const items = appState.videos.filter(v => v.id !== currentVideo.id).slice(0, 6);
             items.forEach(video => {
-                const labelText = (video.fileType === 'image') ? '[IMG] ' : '';
+                const labelText = `[${video.fileType.toUpperCase()}] `;
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 card.onclick = () => loadVideo(video.id);
@@ -1292,7 +1310,7 @@
             
             btn.classList.toggle('hidden', targetBrowsingChannel === currentUser || !currentUser);
             if (currentUser) {
-                btn.innerText = subList.includes(currentUser) ? "Subscribed Avier" : "Subscribe As Avier";
+                btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
             }
         }
 
@@ -1301,7 +1319,7 @@
             if (!currentVideo || currentVideo.creator === currentUser || !currentUser) { return btn.classList.add('hidden'); }
             btn.classList.remove('hidden');
             const subList = appState.subscriptions[currentVideo.creator] || [];
-            btn.innerText = subList.includes(currentUser) ? "Subscribed Avier" : "Subscribe As Avier";
+            btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
         }
 
         function toggleChannelSubscriptionDynamic() { 
