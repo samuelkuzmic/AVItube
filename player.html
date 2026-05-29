@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bypass AVI Player</title>
+    <style>
+        body { 
+            background: #ffffff; 
+            color: #000000; 
+            font-family: sans-serif; 
+            padding: 40px; 
+            text-align: center;
+        }
+        .instruction-container { 
+            max-width: 750px; 
+            margin: 0 auto; 
+            border: 2px dashed #0000FF;
+            padding: 30px;
+            background: #FAFAFA;
+        }
+        h1 {
+            font-size: 32px;
+            color: #0000FF;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+        p {
+            font-size: 20px;
+            line-height: 1.6;
+            color: #333333;
+            margin: 15px 0;
+        }
+        .file-title {
+            font-weight: bold;
+            color: #000000;
+            background: #EAEAEA;
+            padding: 5px 10px;
+            display: inline-block;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="instruction-container">
+        <h1 id="assetHeader">Asset Sync In Progress</h1>
+        <p>Your media asset is downloading instantly to your local device file system template.</p>
+        
+        <hr style="border: 0; border-top: 1px solid #CCCCCC; margin: 25px 0;">
+        
+        <p style="font-size: 24px; font-weight: bold; color: #0000FF;">
+            OPEN THE FILE TO PLAY IT
+        </p>
+        
+        <p>
+        </p>
+    </div>
+
+    <script>
+        // Parse current video title metadata from incoming URL configurations
+        const urlParameters = new URLSearchParams(window.location.search);
+        const incomingVideoTitle = urlParameters.get('title');
+        if (incomingVideoTitle) {
+            document.getElementById('assetHeader').innerText = "Asset: " + incomingVideoTitle;
+        }
+    </script>
+</body>
+</html>
