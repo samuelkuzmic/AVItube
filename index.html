@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>AviTube</title>
-    <!-- GunDB Relay Platform -->
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     
-    <!-- Firebase Core and Cloud Storage Production SDKs -->
+    <!-- Firebase Core, Firestore, & Storage SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
     
     <style>
@@ -59,7 +58,6 @@
             gap: 10px;
         }
         
-        /* Master Split Layout */
         .app-body-layout {
             display: flex;
             flex: 1;
@@ -129,12 +127,17 @@
             border: 1px solid #CCCCCC;
             overflow: hidden;
             position: relative;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        .video-box video, .video-box img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
+
+        .download-display-card {
+            background: #FFFFFF;
+            border: 1px solid #CCCCCC;
+            padding: 20px;
+            text-align: center;
+            width: 90%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         .button {
@@ -146,6 +149,7 @@
             cursor: pointer;
         }
         .button:hover { background: #E0E0E0; }
+        .button:disabled { background: #E0E0E0; color: #888888; cursor: not-allowed; }
         .button.secondary-btn { background: #FFFFFF; }
         .button.danger-btn { background: #FFCCCC; border-color: #FF9999; color: #CC0000; }
         .button.danger-btn:hover { background: #FFAAAA; }
@@ -166,14 +170,6 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 15px;
-        }
-        .drop-zone {
-            background-color: #FFFFFF;
-            border: 1px dashed #CCCCCC;
-            padding: 25px;
-            text-align: center;
-            cursor: pointer;
-            margin-bottom: 10px;
         }
 
         .comment-item { 
@@ -345,14 +341,6 @@
             border-color: #0000FF;
         }
         
-        .media-error-msg {
-            color: #CC0000;
-            font-weight: bold;
-            font-size: 14px;
-            text-align: center;
-            padding: 20px;
-        }
-        
         .hidden { display: none !important; }
     </style>
 </head>
@@ -361,12 +349,12 @@
     <div id="fullscreenAuthPage" class="fullscreen-auth-container">
         <div style="text-align: center; margin-bottom: 20px;">
             <div class="logo" style="font-size: 32px; cursor: default;">Avi<span>Tube</span></div>
-            <div style="font-size: 12px; color: #666666; margin-top: 4px;">Universal Decentralized Mesh Synchronization Active</div>
+            <div style="font-size: 12px; color: #666666; margin-top: 4px;">Zero-Storage Video Link & Download Hub</div>
         </div>
 
         <div class="auth-wrapper">
             <div class="legacy-auth-box">
-                <div class="legacy-auth-title">Fast Pass Legacy Access</div>
+                <div class="legacy-auth-title">Fast Pass Access</div>
                 <div class="legacy-auth-grid">
                     <button class="legacy-quick-btn" title="AviMaster" onclick="directAuthBypass('AviMaster')">AviMaster</button>
                     <button class="legacy-quick-btn" title="SkaterBoy07" onclick="directAuthBypass('SkaterBoy07')">SkaterBoy07</button>
@@ -434,56 +422,79 @@
     <div class="app-body-layout">
         <div class="main-container">
             
+            <!-- HOME PAGE -->
             <div id="homePage">
                 <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #CCCCCC; padding-bottom: 5px;">
                     <b style="font-size: 15px;">ALL MEDIA & FILES</b>
                     <span id="directoryStatus" style="font-size: 12px; color: #777777;">Unlinked</span>
                 </div>
+                
                 <div id="homeGrid" class="home-grid"></div>
+
+                <!-- PAGINATION CONTROLS -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px;">
+                    <button id="prevPageBtn" class="button" onclick="loadPreviousPage()" disabled>&laquo; Previous</button>
+                    <span id="pageIndicator" style="font-size: 12px; font-weight: bold;">Page 1</span>
+                    <button id="nextPageBtn" class="button" onclick="loadNextPage()">Next &raquo;</button>
+                </div>
             </div>
 
+            <!-- AVIERS PAGE -->
             <div id="aviersPage" class="hidden">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #CCCCCC; padding-bottom: 5px;">
                     <b style="font-size: 15px;">ACTIVE AVIERS REGISTRY</b>
-                    <span style="font-size: 11px; color:#555555; font-family: monospace;">Global Decentralized Node Network</span>
+                    <span style="font-size: 11px; color:#555555; font-family: monospace;">Global User Network</span>
                 </div>
                 <div id="aviersGrid" class="aviers-grid"></div>
             </div>
 
+            <!-- UPLOAD LINK / FILE PAGE -->
             <div id="uploadPage" class="hidden">
-                <b>UPLOAD HUB (VIDEOS & SOUNDFILES ONLY)</b>
+                <b>ZERO-STORAGE FILE / LINK REGISTRY</b>
+                <p style="font-size:12px; color:#666666; margin: 4px 0 10px 0;">
+                    Select any video file from your computer or paste a direct web URL. The database only saves video metadata so it consumes zero database space.
+                </p>
                 <hr style="border: 0; border-top: 1px solid #CCCCCC; margin: 10px 0;">
                 <div class="upload-row">
                     <div class="panel-box">
-                        <div id="singleDropZone" class="drop-zone" onclick="document.getElementById('singleFileInput').click()">
-                            <p id="singleDropLabel">Drop Video or Soundfile Here or Click</p>
-                            <input type="file" id="singleFileInput" class="hidden" accept="video/*, audio/*" onchange="handleFileSelection(this.files, 'single')">
+                        <div class="form-group">
+                            <label>Option A: Select Any Video File from Computer</label>
+                            <input type="file" id="localVideoFileInput" accept="video/*,audio/*" onchange="handleLocalFileSelected(this)">
+                        </div>
+                        <div style="text-align:center; font-weight:bold; font-size:11px; color:#888888; margin: 8px 0;">-- OR --</div>
+                        <div class="form-group">
+                            <label>Option B: Web Download Link / Direct URL</label>
+                            <input type="url" id="singleFileUrl" placeholder="https://example.com/video.mp4">
                         </div>
                         <div class="form-group">
                             <label>Title</label>
-                            <input type="text" id="singleTitle">
+                            <input type="text" id="singleTitle" placeholder="Video or Media Title">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="singleFileType" style="width: 100%; padding: 6px; border: 1px solid #CCCCCC;">
+                                <option value="video">Video</option>
+                                <option value="audio">Audio / Soundfile</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <textarea id="singleDesc" rows="2"></textarea>
+                            <textarea id="singleDesc" rows="3" placeholder="Media description..."></textarea>
                         </div>
-                        <button class="button" onclick="processSingleUpload()">Save File</button>
+                        <button class="button" id="singleSaveBtn" onclick="processSingleUpload()">Save Entry to Firestore</button>
                     </div>
 
+                    <!-- BULK UPLOAD PANEL -->
                     <div class="panel-box">
-                        <div id="bulkDropZone" class="drop-zone" onclick="document.getElementById('bulkFilesInput').click()">
-                            <p id="bulkDropLabel">Drop Bulk Files Here</p>
-                            <input type="file" id="bulkFilesInput" class="hidden" multiple accept="video/*, audio/*" onchange="handleFileSelection(this.files, 'bulk')">
-                        </div>
-                        <div class="form-group">
-                            <label>Default Bulk Description</label>
-                            <textarea id="bulkDesc" rows="3"></textarea>
-                        </div>
-                        <button class="button" onclick="processBulkUpload()">Save Batch</button>
+                        <b>Bulk Upload</b>
+                        <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Upload multiple files or paste links separated by new lines.</p>
+                        <textarea style="width:100%; height:150px; border:1px solid #CCCCCC; padding:5px; box-sizing:border-box;" placeholder="Paste URLs here, one per line..."></textarea>
+                        <button class="button" style="margin-top:10px; width:100%;">Process Bulk Entries</button>
                     </div>
                 </div>
             </div>
 
+            <!-- WATCH PAGE -->
             <div id="watchPage" class="watch-split-layout hidden">
                 <div class="player-main-column">
                     <div class="video-box" id="playerDynamicContainer"></div>
@@ -492,7 +503,6 @@
                     <div style="font-size: 12px; color: #777777; margin-bottom: 8px;">
                         <span id="videoUploadTime">--</span> &bull; 
                         <b id="videoViewsDisplay">0 views</b> &bull; 
-                        <b id="videoViewsDisplayAlt" style="margin-right: 5px;">0 streams</b> &bull;
                         <b id="videoDownloadsDisplay" style="color: #0000FF;">0 downloads</b>
                     </div>
                     
@@ -506,8 +516,8 @@
                             <button id="dislikeBtn" class="button secondary-btn" onclick="toggleVote('dislike')">Dislike (<span id="dislikeCount">0</span>)</button>
                         </div>
                         
-                        <div>
-                            <button class="button" style="background:#0000FF; color:#FFFFFF; font-weight:bold; padding: 8px 16px;" onclick="executeDownloadAndStreamTrigger()">PLAY AND DOWNLOAD</button>
+                        <div id="downloadTriggerArea">
+                            <!-- SINGLE DOWNLOAD BUTTON WILL BE RENDERED HERE -->
                         </div>
 
                         <div>
@@ -530,6 +540,7 @@
                 </div>
             </div>
 
+            <!-- CHANNEL PAGE -->
             <div id="channelPage" class="hidden">
                 <div class="panel-box" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                     <div>
@@ -543,7 +554,6 @@
                 </div>
 
                 <div class="profile-matrix-container">
-                    <b style="text-transform: uppercase; font-size: 12px; color: #333333; letter-spacing: 0.5px;">Aggregated Platform Activity Metrics Matrix</b>
                     <div class="profile-matrix-grid">
                         <div class="matrix-stat-card">
                             <div style="font-size: 11px; color:#666;">TOTAL VIEWS</div>
@@ -587,103 +597,77 @@
     </div>
 
     <script>
-        const networkRelay = Gun([
-            'https://gun-manhattan.herokuapp.com/gun',
-            'https://gundb-relay.up.railway.app/gun'
-        ]);
-        const globalDatabaseMatrix = networkRelay.get('avitube_universal_matrix_v5');
-
-        // Web app's Firebase Configuration Integration
         const firebaseConfig = {
-            apiKey: "AIzaSyDlfYzYRkpAVzvVuq4245e-d0FKbkLFS-Q",
-            authDomain: "avitube.firebaseapp.com",
-            projectId: "avitube",
-            storageBucket: "avitube.firebasestorage.app",
-            messagingSenderId: "822005859804",
-            appId: "1:822005859804:web:c5196aab4c514278707b19"
+            apiKey: "AIzaSyAuXcUX87OuVxRG_bs6JSkWRfXq0NYDY-E",
+            authDomain: "avitube-dca1f.firebaseapp.com",
+            projectId: "avitube-dca1f",
+            storageBucket: "avitube-dca1f.appspot.com",
+            messagingSenderId: "919065392855",
+            appId: "1:919065392855:web:85b0d6b551b4a8efb7a292"
         };
 
-        // Fire up Firebase Storage context
         firebase.initializeApp(firebaseConfig);
-        const cloudStorageInstance = firebase.storage();
+        const db = firebase.firestore();
 
+        let currentUser = localStorage.getItem('avitube_logged_user') || null;
+        let currentVideo = null;
+        let targetBrowsingChannel = null;
         let automaticWatchDirHandle = null;
+        let selectedLocalBlobUrl = null;
+        let selectedLocalFileName = null;
 
-        const INITIAL_LEGACY_STATE = {
-            videos: [],
-            subscriptions: { "AviMaster": [], "SkaterBoy07": [], "AlphaTester": [] },
-            downloads: {},
-            videoDownloadCounters: {},
+        let appUsersState = {
             registeredAviers: ["AviMaster", "SkaterBoy07", "AlphaTester"],
             joinDates: { "AviMaster": "5/18/2026", "SkaterBoy07": "5/20/2026", "AlphaTester": "5/25/2026" },
-            passwords: { "AviMaster": "avi123", "SkaterBoy07": "skate123", "AlphaTester": "test123" }
+            passwords: { "AviMaster": "avi123", "SkaterBoy07": "skate123", "AlphaTester": "test123" },
+            subscriptions: { "AviMaster": [], "SkaterBoy07": [], "AlphaTester": [] }
         };
 
-        let appState = JSON.parse(JSON.stringify(INITIAL_LEGACY_STATE));
-        
-        let currentVideo = null;
-        let currentUser = localStorage.getItem('avitube_logged_user') || null;
-        let targetBrowsingChannel = null;
+        const PAGE_SIZE = 50;
+        let pageCursors = []; 
+        let lastVisibleDoc = null;
+        let unsubscribeHomeListener = null;
 
-        let stagedSingleFiles = [];
-        let stagedBulkFiles = [];
-
-        // Instantly verify network alignment on script evaluation load
-        initializeGlobalSyncLayers();
-
-        function initializeGlobalSyncLayers() {
-            globalDatabaseMatrix.get('app_state_json').on(function(data) {
-                if(data && data.payload) {
-                    try {
-                        const parsed = JSON.parse(data.payload);
-                        appState.videos = parsed.videos || [];
-                        appState.subscriptions = parsed.subscriptions || appState.subscriptions;
-                        appState.downloads = parsed.downloads || {};
-                        appState.videoDownloadCounters = parsed.videoDownloadCounters || {};
-                        appState.registeredAviers = parsed.registeredAviers || appState.registeredAviers;
-                        appState.joinDates = parsed.joinDates || appState.joinDates;
-                        appState.passwords = parsed.passwords || appState.passwords;
-                        
-                        syncContextRefresh();
-                    } catch(e) { console.error("Mesh sync serialization error", e); }
-                }
-            });
+        document.addEventListener("DOMContentLoaded", () => {
+            initAppUsersSync();
             evaluateCurrentAuthenticationState();
+            
+            document.getElementById('globalSearchInput').addEventListener('input', () => {
+                if(document.getElementById('homePage').classList.contains('hidden')) showHomePage();
+                fetchPaginatedVideos('first');
+            });
+
+            document.getElementById('aviersSearchInput').addEventListener('input', () => {
+                const query = document.getElementById('aviersSearchInput').value.toLowerCase().trim();
+                if(document.getElementById('aviersPage').classList.contains('hidden')) showAviersPage();
+                renderAviersGrid(query);
+            });
+        });
+
+        function initAppUsersSync() {
+            db.collection('system').doc('app_users').onSnapshot((doc) => {
+                if(doc.exists) {
+                    const data = doc.data();
+                    if(data.registeredAviers) appUsersState.registeredAviers = data.registeredAviers;
+                    if(data.joinDates) appUsersState.joinDates = data.joinDates;
+                    if(data.passwords) appUsersState.passwords = data.passwords;
+                    if(data.subscriptions) appUsersState.subscriptions = data.subscriptions;
+                } else {
+                    saveUsersStateToFirestore();
+                }
+                if(!document.getElementById('aviersPage').classList.contains('hidden')) renderAviersGrid();
+            });
         }
 
-        function saveStateToDatabase() {
-            globalDatabaseMatrix.get('app_state_json').put({ payload: JSON.stringify(appState) });
-        }
-
-        async function uploadVideoBinaryToFirebase(id, fileBlob) {
-            const fileReference = cloudStorageInstance.ref().child('media_assets/' + id + '_' + fileBlob.name);
-            const uploadSnapshot = await fileReference.put(fileBlob);
-            const globalDownloadURL = await uploadSnapshot.ref.getDownloadURL();
-            return globalDownloadURL;
-        }
-
-        async function removeVideoBinaryFromFirebase(fileUrl) {
-            try {
-                const fileReference = cloudStorageInstance.refFromURL(fileUrl);
-                await fileReference.delete();
-            } catch(e) { console.warn("Firebase file asset removal bypassed or missing", e); }
-        }
-
-        function showAuthError(message) {
-            const errDiv = document.getElementById('authErrorDisplay');
-            errDiv.innerText = message;
-            errDiv.classList.remove('hidden');
-        }
-
-        function clearAuthError() {
-            document.getElementById('authErrorDisplay').classList.add('hidden');
+        function saveUsersStateToFirestore() {
+            db.collection('system').doc('app_users').set(appUsersState, { merge: true });
         }
 
         function evaluateCurrentAuthenticationState() {
             if (currentUser) {
                 document.getElementById('fullscreenAuthPage').classList.add('hidden');
                 document.getElementById('headerUserLabel').innerText = `@${currentUser}`;
-                renderHomeGrid();
+                showHomePage();
             } else {
                 document.getElementById('fullscreenAuthPage').classList.remove('hidden');
             }
@@ -693,8 +677,6 @@
             currentUser = accountName;
             localStorage.setItem('avitube_logged_user', currentUser);
             evaluateCurrentAuthenticationState();
-            syncContextRefresh();
-            showHomePage();
         }
 
         function switchAuthMode(mode) {
@@ -712,12 +694,11 @@
 
             if (!username) return showAuthError("Please type your profile username.");
 
-            if (appState.registeredAviers.includes(username)) {
-                if (appState.passwords[username] === pass) {
+            if (appUsersState.registeredAviers.includes(username)) {
+                if (appUsersState.passwords[username] === pass) {
                     currentUser = username;
                     localStorage.setItem('avitube_logged_user', currentUser);
                     evaluateCurrentAuthenticationState();
-                    syncContextRefresh();
                 } else {
                     showAuthError("Invalid security matching key parameter.");
                 }
@@ -734,23 +715,22 @@
             if (username.length < 2) return showAuthError("Username sequence must span at least 2 alpha characters.");
             if (!pass) return showAuthError("Account entries require a private password construct.");
 
-            if (appState.registeredAviers.includes(username)) {
+            if (appUsersState.registeredAviers.includes(username)) {
                 return showAuthError("This handle string is already allocated to a distinct profile system.");
             }
 
-            appState.registeredAviers.push(username);
-            appState.joinDates[username] = new Date().toLocaleDateString();
-            appState.passwords[username] = pass;
+            appUsersState.registeredAviers.push(username);
+            appUsersState.joinDates[username] = new Date().toLocaleDateString();
+            appUsersState.passwords[username] = pass;
+            appUsersState.subscriptions[username] = [];
 
-            saveStateToDatabase();
+            saveUsersStateToFirestore();
             currentUser = username;
             localStorage.setItem('avitube_logged_user', currentUser);
             
             document.getElementById('regUserField').value = '';
             document.getElementById('regPassField').value = '';
-            
             evaluateCurrentAuthenticationState();
-            syncContextRefresh();
         }
 
         function executeSignOutAction() {
@@ -762,254 +742,91 @@
             evaluateCurrentAuthenticationState();
         }
 
-        function syncContextRefresh() {
-            if (currentVideo) { 
-                const foundLive = appState.videos.find(v => v.id === currentVideo.id);
-                if (foundLive) currentVideo = foundLive;
-                updateVoteUI(); 
-                updateWatchPageSubButton(); 
-                renderComments(); 
-            }
-            if (!document.getElementById('channelPage').classList.contains('hidden')) {
-                showChannelPage(targetBrowsingChannel);
-            }
-            if (!document.getElementById('aviersPage').classList.contains('hidden')) {
-                showAviersPage();
-            }
-            renderHomeGrid(document.getElementById('globalSearchInput').value.toLowerCase().trim());
+        function showAuthError(message) {
+            const errDiv = document.getElementById('authErrorDisplay');
+            errDiv.innerText = message;
+            errDiv.classList.remove('hidden');
         }
 
-        function showMyChannelPage() {
-            if (!currentUser) return;
-            showChannelPage(currentUser);
+        function clearAuthError() {
+            document.getElementById('authErrorDisplay').classList.add('hidden');
         }
 
-        async function triggerDesktopFolderLink() {
-            try {
-                const rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                automaticWatchDirHandle = await rootHandle.getDirectoryHandle("avitube_watch_history", { create: true });
-                document.getElementById('directoryStatus').innerHTML = "Auto-Syncing (/avitube_watch_history)";
-            } catch (err) { console.error(err); }
-        }
+        function fetchPaginatedVideos(direction = 'first') {
+            const filterQuery = document.getElementById('globalSearchInput').value.toLowerCase().trim();
+            let query = db.collection('videos').orderBy('createdAt', 'desc');
 
-        function setupDragAndDropZone(zoneId, type) {
-            const el = document.getElementById(zoneId);
-            if(!el) return;
-            ['dragenter', 'dragover'].forEach(ev => el.addEventListener(ev, (e) => { e.preventDefault(); }, false));
-            el.addEventListener('drop', (e) => {
-                e.preventDefault();
-                handleFileSelection(e.dataTransfer.files, type);
-            }, false);
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            setupDragAndDropZone('singleDropZone', 'single');
-            setupDragAndDropZone('bulkDropZone', 'bulk');
-            
-            document.getElementById('globalSearchInput').addEventListener('input', () => {
-                const query = document.getElementById('globalSearchInput').value.toLowerCase().trim();
-                if(document.getElementById('homePage').classList.contains('hidden')) showHomePage();
-                renderHomeGrid(query);
-            });
-
-            document.getElementById('aviersSearchInput').addEventListener('input', () => {
-                const query = document.getElementById('aviersSearchInput').value.toLowerCase().trim();
-                if(document.getElementById('aviersPage').classList.contains('hidden')) showAviersPage();
-                renderAviersGrid(query);
-            });
-        });
-
-        function scanFileHeaderSecurity(file, callback) {
-            const reader = new FileReader();
-            reader.onloadend = function(evt) {
-                if (evt.target.readyState === FileReader.DONE) {
-                    const arr = (new Uint8Array(evt.target.result)).subarray(0, 4);
-                    let headerString = "";
-                    for(let i = 0; i < arr.length; i++) { headerString += arr[i].toString(16).toUpperCase(); }
-                    
-                    const isExecutable = headerString.startsWith("4D5A") || headerString.startsWith("7F454C46") || file.name.endsWith('.exe') || file.name.endsWith('.bat') || file.name.endsWith('.scr');
-                    const isVideoMedia = headerString.startsWith("00018") || headerString.startsWith("00014") || headerString.startsWith("1A45DFA3") || headerString.startsWith("464C56") || file.type.startsWith('video/');
-                    const isAudioMedia = file.type.startsWith('audio/');
-                    const isApprovedAssetClass = isVideoMedia || isAudioMedia;
-
-                    if (isExecutable || !isApprovedAssetClass) callback(false);
-                    else callback(true);
-                }
-            };
-            reader.readAsArrayBuffer(file.slice(0, 4));
-        }
-
-        function handleFileSelection(files, type) {
-            const file = files[0];
-            if (!file) return;
-
-            if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
-                alert("Security block: Only video files and soundfiles can be selected.");
-                return;
-            }
-
-            if (type === 'single') {
-                stagedSingleFiles = [file];
-                document.getElementById('singleDropLabel').innerText = "Staged: " + file.name;
+            if (direction === 'next' && lastVisibleDoc) {
+                query = query.startAfter(lastVisibleDoc);
+            } else if (direction === 'prev' && pageCursors.length > 1) {
+                pageCursors.pop();
+                const prevCursor = pageCursors[pageCursors.length - 1];
+                if (prevCursor) query = query.startAt(prevCursor);
             } else {
-                stagedBulkFiles = Array.from(files).filter(f => f.type.startsWith('video/') || f.type.startsWith('audio/'));
-                document.getElementById('bulkDropLabel').innerText = "Staged: " + stagedBulkFiles.length + " Files";
-            }
-        }
-
-        async function processSingleUpload() {
-            if (!currentUser || stagedSingleFiles.length === 0) return;
-            const file = stagedSingleFiles[0];
-            const customTitle = document.getElementById('singleTitle').value.trim();
-            const desc = document.getElementById('singleDesc').value.trim();
-            const generatedId = 'vid_' + Date.now();
-
-            if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
-                alert("Security exception: System parameters only permit video files and soundfiles.");
-                return;
+                pageCursors = [];
             }
 
-            document.getElementById('singleDropLabel').innerText = "Uploading to Cloud Pipeline...";
+            query = query.limit(PAGE_SIZE);
 
-            scanFileHeaderSecurity(file, async function(isSafeFile) {
-                try {
-                    const cloudAssetUrl = await uploadVideoBinaryToFirebase(generatedId, file);
-                    
-                    appState.videos.unshift({
-                        id: generatedId,
-                        title: customTitle || file.name.replace(/\.[^/.]+$/, ""),
-                        fileName: file.name,
-                        fileUrl: cloudAssetUrl,
-                        description: desc,
-                        uploadTime: new Date().toLocaleString(),
-                        creator: currentUser,
-                        views: 0,
-                        isMalwareFlagged: !isSafeFile,
-                        fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
-                        likedBy: [], dislikedBy: [], comments: []
-                    });
-                    saveStateToDatabase();
+            if (unsubscribeHomeListener) unsubscribeHomeListener();
 
-                    stagedSingleFiles = [];
-                    document.getElementById('singleTitle').value = '';
-                    document.getElementById('singleDesc').value = '';
-                    document.getElementById('singleDropLabel').innerText = "Drop Video or Soundfile Here or Click";
-                    showHomePage();
-                } catch(err) {
-                    console.error(err);
-                    alert("Cloud asset sync failure. Check your Firebase Cloud storage security settings.");
-                    document.getElementById('singleDropLabel').innerText = "Sync Failed. Retrying Permitted.";
+            unsubscribeHomeListener = query.onSnapshot((snapshot) => {
+                const videoDocs = [];
+                snapshot.forEach(doc => videoDocs.push({ id: doc.id, ...doc.data() }));
+
+                if (snapshot.docs.length > 0) {
+                    lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
+                    const firstDoc = snapshot.docs[0];
+                    if (direction !== 'prev' && !pageCursors.some(c => c.id === firstDoc.id)) {
+                        pageCursors.push(firstDoc);
+                    }
                 }
+
+                renderHomeGrid(videoDocs, filterQuery);
+                updatePaginationButtons(snapshot.docs.length);
             });
         }
 
-        async function processBulkUpload() {
-            if (!currentUser || stagedBulkFiles.length === 0) return;
-            const defaultDesc = document.getElementById('bulkDesc').value.trim();
-            let totalToProcess = stagedBulkFiles.length;
-            document.getElementById('bulkDropLabel').innerText = `Syncing Batch (0/${totalToProcess})...`;
-
-            for (let i = 0; i < stagedBulkFiles.length; i++) {
-                const file = stagedBulkFiles[i];
-                if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
-                    continue;
-                }
-
-                const generatedId = 'vid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-                
-                await new Promise((resolve) => {
-                    scanFileHeaderSecurity(file, async function(isSafeFile) {
-                        try {
-                            const cloudAssetUrl = await uploadVideoBinaryToFirebase(generatedId, file);
-                            appState.videos.unshift({
-                                id: generatedId,
-                                title: file.name.replace(/\.[^/.]+$/, ""),
-                                fileName: file.name,
-                                fileUrl: cloudAssetUrl,
-                                description: defaultDesc,
-                                uploadTime: new Date().toLocaleString(),
-                                creator: currentUser,
-                                views: 0,
-                                isMalwareFlagged: !isSafeFile,
-                                fileType: file.type.startsWith('audio/') ? 'audio' : 'video',
-                                likedBy: [], dislikedBy: [], comments: []
-                            });
-                        } catch(e) { console.error("Batch slot fail", e); }
-                        resolve();
-                    });
-                });
-                document.getElementById('bulkDropLabel').innerText = `Syncing Batch (${i+1}/${totalToProcess})...`;
-            }
-
-            saveStateToDatabase();
-            stagedBulkFiles = [];
-            document.getElementById('bulkDesc').value = '';
-            document.getElementById('bulkDropLabel').innerText = "Drop Bulk Files Here";
-            showHomePage();
+        function updatePaginationButtons(itemCount) {
+            document.getElementById('prevPageBtn').disabled = (pageCursors.length <= 1);
+            document.getElementById('nextPageBtn').disabled = (itemCount < PAGE_SIZE);
+            document.getElementById('pageIndicator').innerText = `Page ${pageCursors.length || 1}`;
         }
 
-        function showHomePage() {
-            document.getElementById('watchPage').classList.add('hidden');
-            document.getElementById('channelPage').classList.add('hidden');
-            document.getElementById('uploadPage').classList.add('hidden');
-            document.getElementById('aviersPage').classList.add('hidden');
-            document.getElementById('homePage').classList.remove('hidden');
-            renderHomeGrid(document.getElementById('globalSearchInput').value.toLowerCase().trim());
-        }
+        function loadNextPage() { fetchPaginatedVideos('next'); }
+        function loadPreviousPage() { fetchPaginatedVideos('prev'); }
 
-        function showUploadPage() {
-            document.getElementById('watchPage').classList.add('hidden');
-            document.getElementById('channelPage').classList.add('hidden');
-            document.getElementById('aviersPage').classList.add('hidden');
-            document.getElementById('homePage').classList.add('hidden');
-            document.getElementById('uploadPage').classList.remove('hidden');
-        }
-
-        function showAviersPage() {
-            document.getElementById('watchPage').classList.add('hidden');
-            document.getElementById('channelPage').classList.add('hidden');
-            document.getElementById('uploadPage').classList.add('hidden');
-            document.getElementById('homePage').classList.add('hidden');
-            document.getElementById('aviersPage').classList.remove('hidden');
-            renderAviersGrid(document.getElementById('aviersSearchInput').value.toLowerCase().trim());
-        }
-
-        function calculateNestedComments(arr) {
-            if(!arr) return 0;
-            let total = arr.length;
-            arr.forEach(c => { if(c.replies) total += calculateNestedComments(c.replies); });
-            return total;
-        }
-
-        function renderHomeGrid(filterQuery = "") {
+        function renderHomeGrid(videos, filterQuery = "") {
             const grid = document.getElementById('homeGrid');
             if(!grid) return;
             grid.innerHTML = '';
 
-            const matches = appState.videos.filter(v => {
+            const matches = videos.filter(v => {
                 return !filterQuery || v.title.toLowerCase().includes(filterQuery) || v.creator.toLowerCase().includes(filterQuery);
             });
 
+            if (matches.length === 0) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #777; padding: 20px;">No uploads found on this page.</div>`;
+                return;
+            }
+
             matches.forEach(video => {
-                const dlCount = appState.videoDownloadCounters[video.id] ? appState.videoDownloadCounters[video.id].length : 0;
+                const dlCount = video.downloads ? video.downloads.length : 0;
                 const likes = video.likedBy ? video.likedBy.length : 0;
                 const dislikes = video.dislikedBy ? video.dislikedBy.length : 0;
                 const commentCount = video.comments ? calculateNestedComments(video.comments) : 0;
-                const typeLabel = video.fileType.toUpperCase();
+                const typeLabel = (video.fileType || 'video').toUpperCase();
 
                 const card = document.createElement('div');
                 card.className = 'video-card';
                 card.onclick = () => loadVideo(video.id);
 
-                let badgeMarkup = video.isMalwareFlagged ? `<span style="color:#CC0000; font-weight:bold; font-size:10px; display:block; margin-top:2px;">FLAG: UNKNOWN APPLICATION</span>` : '';
-
                 card.innerHTML = `
-                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : ''}">
-                        ${video.isMalwareFlagged ? 'SUSPECT' : typeLabel}
+                    <div class="card-thumb">
+                        ${typeLabel}
                     </div>
                     <div class="card-title">${escapeHTML(video.title)}</div>
                     <div class="card-metadata">By: ${escapeHTML(video.creator)}</div>
-                    ${badgeMarkup}
                     <div class="card-metadata">${video.views || 0} views &bull; <b style="color:#0000FF;">${dlCount} dl</b></div>
                     <div class="card-metadata" style="color: #444444; margin-top: 2px;">
                         Likes: ${likes} &bull; Dislikes: ${dislikes} &bull; Comments: ${commentCount}
@@ -1019,45 +836,80 @@
             });
         }
 
-        function renderAviersGrid(filterQuery = "") {
-            const grid = document.getElementById('aviersGrid');
-            if(!grid) return;
-            grid.innerHTML = '';
-
-            const matches = appState.registeredAviers.filter(name => {
-                return !filterQuery || name.toLowerCase().includes(filterQuery);
-            });
-
-            matches.forEach(name => {
-                const subs = appState.subscriptions[name] || [];
-
-                const card = document.createElement('div');
-                card.className = 'avier-card';
-                card.onclick = () => showChannelPage(name);
+        function handleLocalFileSelected(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                selectedLocalBlobUrl = URL.createObjectURL(file);
+                selectedLocalFileName = file.name;
                 
-                let isSubbed = currentUser ? subs.includes(currentUser) : false;
-                const subBtnMarkup = (name !== currentUser) ? 
-                    `<button class="button" style="margin-top:10px; background:${isSubbed ? '#F0F0F0' : '#FFCCCC'};" 
-                        onclick="event.stopPropagation(); executeSubscriptionActionToggle('${name}'); renderAviersGrid('${filterQuery}');">
-                        ${isSubbed ? 'Called Avier' : 'Call Avier'}
-                     </button>` : `<div style="font-size:11px; margin-top:10px; color:#777777;">You</div>`;
-
-                card.innerHTML = `
-                    <div class="avier-thumb">${name.charAt(0).toUpperCase()}</div>
-                    <b style="font-size:14px;">${escapeHTML(name)}</b>
-                    <div class="card-metadata" style="margin-top:4px; font-weight: bold;">${subs.length} Aviers</div>
-                    ${subBtnMarkup}
-                `;
-                grid.appendChild(card);
-            });
+                const titleField = document.getElementById('singleTitle');
+                if (!titleField.value) {
+                    titleField.value = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                }
+            }
         }
 
-        function loadVideo(id) {
-            currentVideo = appState.videos.find(v => v.id === id);
-            if(!currentVideo) return;
+        async function processSingleUpload() {
+            if (!currentUser) return alert("Please log in to register a file link.");
+            
+            let fileUrl = document.getElementById('singleFileUrl').value.trim();
+            const customTitle = document.getElementById('singleTitle').value.trim();
+            const fileType = document.getElementById('singleFileType').value;
+            const desc = document.getElementById('singleDesc').value.trim();
+            
+            if (selectedLocalBlobUrl) {
+                fileUrl = selectedLocalBlobUrl;
+            }
 
+            if (!fileUrl) return alert("Please provide a valid download link / URL or choose a local file.");
+            if (!customTitle) return alert("Please provide a title for this link entry.");
+
+            const generatedId = 'vid_' + Date.now();
+            const btn = document.getElementById('singleSaveBtn');
+
+            try {
+                btn.disabled = true;
+                btn.innerText = "Saving to Firestore...";
+
+                await db.collection('videos').doc(generatedId).set({
+                    id: generatedId,
+                    title: customTitle,
+                    fileUrl: fileUrl,
+                    fileName: selectedLocalFileName || customTitle,
+                    description: desc,
+                    uploadTime: new Date().toLocaleString(),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    creator: currentUser,
+                    views: 0,
+                    fileType: fileType,
+                    likedBy: [], dislikedBy: [], downloads: [], comments: []
+                });
+                
+                btn.disabled = false;
+                btn.innerText = "Save Entry to Firestore";
+                document.getElementById('singleFileUrl').value = '';
+                document.getElementById('singleTitle').value = '';
+                document.getElementById('singleDesc').value = '';
+                document.getElementById('localVideoFileInput').value = '';
+                selectedLocalBlobUrl = null;
+                selectedLocalFileName = null;
+                showHomePage();
+            } catch (err) {
+                console.error("Firestore Document Error:", err);
+                alert("Firestore save failed: " + err.message);
+                btn.disabled = false;
+                btn.innerText = "Save Entry to Firestore";
+            }
+        }
+
+        async function loadVideo(id) {
+            const docRef = db.collection('videos').doc(id);
+            const doc = await docRef.get();
+            if(!doc.exists) return;
+
+            currentVideo = { id: doc.id, ...doc.data() };
+            await docRef.update({ views: firebase.firestore.FieldValue.increment(1) });
             currentVideo.views = (currentVideo.views || 0) + 1;
-            saveStateToDatabase();
 
             document.getElementById('homePage').classList.add('hidden');
             document.getElementById('channelPage').classList.add('hidden');
@@ -1068,18 +920,7 @@
             document.getElementById('mainVideoTitle').innerText = currentVideo.title;
             document.getElementById('videoUploadTime').innerText = currentVideo.uploadTime;
             document.getElementById('videoViewsDisplay').innerText = `${currentVideo.views} views`;
-            
-            const descArea = document.getElementById('mainVideoDesc');
-            let rawDesc = currentVideo.description || "";
-            if (rawDesc.length > 250) {
-                let truncated = rawDesc.substring(0, 250) + "... ";
-                descArea.innerHTML = `${escapeHTML(truncated)}<span id="clickSeeResultsBtn" style="color:#0000FF; cursor:pointer; font-weight:bold; text-decoration:underline;">click to see results</span>`;
-                document.getElementById('clickSeeResultsBtn').onclick = () => {
-                    descArea.innerText = rawDesc;
-                };
-            } else {
-                descArea.innerText = rawDesc;
-            }
+            document.getElementById('mainVideoDesc').innerText = currentVideo.description || "";
             
             const authorLink = document.getElementById('videoAuthorLink');
             authorLink.innerText = `@${currentVideo.creator}`;
@@ -1093,319 +934,50 @@
         }
 
         function updatePlayerContainerHub() {
+            // Replaces the complicated UI with a single download button area
             const container = document.getElementById('playerDynamicContainer');
-            
-            const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
+            const dlArea = document.getElementById('downloadTriggerArea');
+            const dlCount = currentVideo.downloads ? currentVideo.downloads.length : 0;
             document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
 
-            if (!currentVideo.fileUrl) {
-                container.innerHTML = `<div class="media-error-msg">CRITICAL DATA FORMAT MISMATCH: This record targets legacy offline database tracks. Re-upload file to apply mesh configuration.</div>`;
-                return;
-            }
+            // Reset Dynamic Player
+            container.innerHTML = `<div style="color: #666; font-size: 14px;">[${(currentVideo.fileType || 'video').toUpperCase()}] Ready for Download</div>`;
 
-            if (currentVideo.fileType === 'audio') {
-                container.innerHTML = `<audio src="${currentVideo.fileUrl}" controls style="width:85%; background:#FAF9F6; padding:10px; border:1px solid #767676;"></audio>`;
-            } else {
-                container.innerHTML = `<video src="${currentVideo.fileUrl}" controls autoplay style="width:100%; height:100%;"></video>`;
-            }
+            // Render single button
+            dlArea.innerHTML = `
+                <button class="button" style="background:#0000FF; color:#FFFFFF; font-weight:bold; padding: 10px 20px; font-size: 14px;" 
+                        onclick="executeDownloadAndStreamTrigger()">
+                    DOWNLOAD FILE
+                </button>
+            `;
         }
 
         async function executeDownloadAndStreamTrigger() {
-            if (!currentVideo || !currentVideo.fileUrl) {
-                alert("Error: Public sync path missing from target structural matrix.");
-                return;
+            if (!currentVideo || !currentVideo.fileUrl) return;
+
+            // 1. Update counter in DB
+            if (!currentVideo.downloads) currentVideo.downloads = [];
+            if (!currentVideo.downloads.includes(currentUser)) {
+                currentVideo.downloads.push(currentUser);
+                await db.collection('videos').doc(currentVideo.id).update({ 
+                    downloads: currentVideo.downloads 
+                });
+                // Update UI count
+                document.getElementById('videoDownloadsDisplay').innerText = `${currentVideo.downloads.length} downloads`;
             }
 
-            if(!appState.downloads) appState.downloads = {};
-            if(!appState.downloads[currentUser]) appState.downloads[currentUser] = [];
-            if(!appState.downloads[currentUser].includes(currentVideo.fileName)) {
-                appState.downloads[currentUser].push(currentVideo.fileName);
-            }
-
-            if(!appState.videoDownloadCounters) appState.videoDownloadCounters = {};
-            if(!appState.videoDownloadCounters[currentVideo.id]) appState.videoDownloadCounters[currentVideo.id] = [];
-            if(!appState.videoDownloadCounters[currentVideo.id].includes(currentUser)) {
-                appState.videoDownloadCounters[currentVideo.id].push(currentUser);
-            }
-
-            // Sync down context automatically via File System Access layout handles if enabled
-            if (automaticWatchDirHandle) {
-                try {
-                    const res = await fetch(currentVideo.fileUrl);
-                    const fileBlob = await res.blob();
-                    const fileHandle = await automaticWatchDirHandle.getFileHandle(currentVideo.fileName, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(fileBlob);
-                    await writable.close();
-                } catch (e) { console.warn("Auto-write log down failed", e); }
-            }
-
-            saveStateToDatabase();
+            // 2. Perform Download
+            const downloadLink = document.createElement('a');
+            downloadLink.href = currentVideo.fileUrl;
+            downloadLink.download = currentVideo.fileName || currentVideo.title || "video";
+            downloadLink.target = "_blank"; 
             
-            const dlCount = appState.videoDownloadCounters[currentVideo.id] ? appState.videoDownloadCounters[currentVideo.id].length : 0;
-            document.getElementById('videoDownloadsDisplay').innerText = `${dlCount} downloads`;
-
-            // Public direct browser standard binary anchor download trigger fallback
-            const anchor = document.createElement('a');
-            anchor.href = currentVideo.fileUrl;
-            anchor.download = currentVideo.fileName;
-            anchor.target = "_blank";
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-
-            window.open(`player.html?title=${encodeURIComponent(currentVideo.title)}`, '_blank');
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
         }
 
-        function showChannelPage(channelOwnerName) {
-            targetBrowsingChannel = channelOwnerName;
-            document.getElementById('homePage').classList.add('hidden');
-            document.getElementById('watchPage').classList.add('hidden');
-            document.getElementById('uploadPage').classList.add('hidden');
-            document.getElementById('aviersPage').classList.add('hidden');
-            document.getElementById('channelPage').classList.remove('hidden');
-            document.getElementById('channelInlineEditBox').classList.add('hidden');
-
-            document.getElementById('channelNameDisplay').innerText = `${channelOwnerName}'s Channel`;
-            
-            const joinDate = appState.joinDates[channelOwnerName] || new Date().toLocaleDateString();
-            document.getElementById('channelJoinedDateDisplay').innerText = `Joined: ${joinDate}`;
-
-            let totalViews = 0, totalDownloads = 0, totalLikes = 0, totalDislikes = 0;
-
-            appState.videos.forEach(v => {
-                if (v.creator === channelOwnerName) {
-                    totalViews += (v.views || 0);
-                    totalDownloads += (appState.videoDownloadCounters[v.id] ? appState.videoDownloadCounters[v.id].length : 0);
-                    totalLikes += (v.likedBy ? v.likedBy.length : 0);
-                    totalDislikes += (v.dislikedBy ? v.dislikedBy.length : 0);
-                }
-            });
-
-            document.getElementById('matrixTotalViews').innerText = totalViews;
-            document.getElementById('matrixTotalDownloads').innerText = totalDownloads;
-            document.getElementById('matrixTotalLikes').innerText = totalLikes;
-            document.getElementById('matrixTotalDislikes').innerText = totalDislikes;
-            
-            updateChannelPageSubView();
-
-            const channelGrid = document.getElementById('channelVideosGrid');
-            channelGrid.innerHTML = '';
-
-            const ownerVideos = appState.videos.filter(v => v.creator === channelOwnerName);
-            ownerVideos.forEach(video => {
-                const innerDls = appState.videoDownloadCounters[video.id] ? appState.videoDownloadCounters[video.id].length : 0;
-                const likes = video.likedBy ? video.likedBy.length : 0;
-                const dislikes = video.dislikedBy ? video.dislikedBy.length : 0;
-                const commentCount = video.comments ? calculateNestedComments(video.comments) : 0;
-                const typeLabel = video.fileType.toUpperCase();
-
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.onclick = () => loadVideo(video.id);
-                
-                let managementButtons = '';
-                if (channelOwnerName === currentUser) {
-                    managementButtons = `
-                        <div id="ctrl_actions_${video.id}" style="margin-top:6px; display:flex; gap:5px;">
-                            <button class="button" onclick="openChannelInlineEditor('${video.id}', event)">Edit</button>
-                            <button class="button danger-btn" onclick="renderMakeSureGui('${video.id}', event)">Delete</button>
-                        </div>
-                        <div id="ctrl_confirm_${video.id}" class="confirm-banner hidden" onclick="event.stopPropagation();">
-                            <span>Are you sure?</span> 
-                            <button class="button danger-btn" style="padding:2px 6px; font-size:11px;" onclick="executeDeleteVideoRecord('${video.id}', '${video.fileUrl}', event)">Yes</button>
-                            <button class="button" style="padding:2px 6px; font-size:11px;" onclick="cancelDeleteGui('${video.id}', event)">No</button>
-                        </div>
-                    `;
-                }
-
-                let badgeMarkup = video.isMalwareFlagged ? `<span style="color:#CC0000; font-weight:bold; font-size:10px; display:block; margin-top:2px;">FLAG: UNKNOWN APPLICATION</span>` : '';
-
-                card.innerHTML = `
-                    <div class="card-thumb" style="${video.isMalwareFlagged ? 'background:#FFD2D2; color:#CC0000;' : ''}">
-                        ${video.isMalwareFlagged ? 'SUSPECT' : typeLabel}
-                    </div>
-                    <div class="card-title">${escapeHTML(video.title)}</div>
-                    ${badgeMarkup}
-                    <div class="card-metadata">${video.views || 0} views &bull; <b style="color:#0000FF;">${innerDls} dl</b></div>
-                    <div class="card-metadata" style="color: #444444; font-weight: bold; margin-top: 2px; margin-bottom: 4px;">
-                        Likes: ${likes} &bull; Dislikes: ${dislikes} &bull; Comments: ${commentCount}
-                    </div>
-                    ${managementButtons}
-                `;
-                channelGrid.appendChild(card);
-            });
-        }
-
-        function renderMakeSureGui(videoId, event) {
-            event.stopPropagation();
-            document.getElementById(`ctrl_actions_${videoId}`).classList.add('hidden');
-            document.getElementById(`ctrl_confirm_${videoId}`).classList.remove('hidden');
-        }
-
-        function cancelDeleteGui(videoId, event) {
-            event.stopPropagation();
-            document.getElementById(`ctrl_confirm_${videoId}`).classList.add('hidden');
-            document.getElementById(`ctrl_actions_${videoId}`).classList.remove('hidden');
-        }
-
-        async function executeDeleteVideoRecord(videoId, fileUrl, event) {
-            event.stopPropagation();
-            appState.videos = appState.videos.filter(v => v.id !== videoId);
-            if(appState.videoDownloadCounters[videoId]) delete appState.videoDownloadCounters[videoId];
-            saveStateToDatabase();
-            if(fileUrl) { await removeVideoBinaryFromFirebase(fileUrl); }
-            showChannelPage(targetBrowsingChannel);
-        }
-
-        function openChannelInlineEditor(videoId, event) {
-            event.stopPropagation();
-            const video = appState.videos.find(v => v.id === videoId);
-            if (!video) return;
-
-            const editBox = document.getElementById('channelInlineEditBox');
-            editBox.classList.remove('hidden');
-            
-            document.getElementById('inlineEditVideoId').value = video.id;
-            document.getElementById('inlineEditTitle').value = video.title;
-            document.getElementById('inlineEditDesc').value = video.description || '';
-        }
-
-        function saveChannelInlineMetadata() {
-            const id = document.getElementById('inlineEditVideoId').value;
-            const video = appState.videos.find(v => v.id === id);
-            if (!video) return;
-
-            video.title = document.getElementById('inlineEditTitle').value.trim() || video.title;
-            video.description = document.getElementById('inlineEditDesc').value.trim();
-            
-            saveStateToDatabase();
-            document.getElementById('channelInlineEditBox').classList.add('hidden');
-            showChannelPage(targetBrowsingChannel);
-        }
-
-        function renderSideQueue() {
-            const sideGrid = document.getElementById('sideQueueGrid');
-            if(!sideGrid) return;
-            sideGrid.innerHTML = '';
-            
-            const items = appState.videos.filter(v => v.id !== currentVideo.id).slice(0, 6);
-            items.forEach(video => {
-                const labelText = `[${video.fileType.toUpperCase()}] `;
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.onclick = () => loadVideo(video.id);
-                card.innerHTML = `
-                    <div class="card-title" style="margin-top:0; font-size:12px; color:${video.isMalwareFlagged ? '#CC0000':'#000000'};">
-                        ${video.isMalwareFlagged ? 'SUSPECT ' : labelText}${escapeHTML(video.title)}
-                    </div>
-                    <div class="card-metadata">@${escapeHTML(video.creator)} &bull; ${video.views || 0} views</div>
-                `;
-                sideGrid.appendChild(card);
-            });
-        }
-
-        function updateChannelPageSubView() {
-            if (!targetBrowsingChannel) return;
-            const subList = appState.subscriptions[targetBrowsingChannel] || [];
-            document.getElementById('channelSubCountDisplay').innerText = `${subList.length} Aviers`;
-            const btn = document.getElementById('channelActionSubBtn');
-            
-            btn.classList.toggle('hidden', targetBrowsingChannel === currentUser || !currentUser);
-            if (currentUser) {
-                btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
-            }
-        }
-
-        function updateWatchPageSubButton() {
-            const btn = document.getElementById('watchPageSubBtn');
-            if (!currentVideo || currentVideo.creator === currentUser || !currentUser) { return btn.classList.add('hidden'); }
-            btn.classList.remove('hidden');
-            const subList = appState.subscriptions[currentVideo.creator] || [];
-            btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
-        }
-
-        function toggleChannelSubscriptionDynamic() { 
-            if(!currentUser) return;
-            executeSubscriptionActionToggle(targetBrowsingChannel); 
-            showChannelPage(targetBrowsingChannel); 
-        }
-        
-        function toggleChannelSubscriptionFromWatch() { 
-            if (!currentVideo || !currentUser) return; 
-            executeSubscriptionActionToggle(currentVideo.creator); 
-            updateWatchPageSubButton(); 
-        }
-
-        function executeSubscriptionActionToggle(targetChannel) {
-            if (!currentUser || !targetChannel || targetChannel === currentUser) return;
-            if (!appState.subscriptions[targetChannel]) appState.subscriptions[targetChannel] = [];
-            const idx = appState.subscriptions[targetChannel].indexOf(currentUser);
-            if (idx > -1) appState.subscriptions[targetChannel].splice(idx, 1);
-            else appState.subscriptions[targetChannel].push(currentUser);
-            saveStateToDatabase();
-        }
-
-        function submitComment() {
-            if(!currentVideo) return;
-            const input = document.getElementById('newCommentText');
-            const text = input.value.trim();
-            if(text === "") return;
-
-            if(!currentVideo.comments) currentVideo.comments = [];
-            currentVideo.comments.push({
-                id: 'c_' + Date.now(), 
-                user: currentUser, 
-                text: text,
-                timeLabel: new Date().toLocaleString(),
-                likedBy: [], dislikedBy: [], replies: []
-            });
-            saveStateToDatabase(); renderComments(); input.value = '';
-        }
-
-        function toggleReplyForm(id) {
-            const wrapId = 'reply_box_wrapper_' + id;
-            const targetEl = document.getElementById(wrapId);
-            if(targetEl) return targetEl.remove();
-
-            const wrap = document.createElement('div');
-            wrap.id = wrapId;
-            wrap.className = 'indent-structural-layer';
-            wrap.innerHTML = `
-                <input type="text" id="field_target_${id}" style="width:50%; margin-top:4px;" placeholder="Reply...">
-                <button class="button" onclick="submitReply('${id}')">Send</button>
-            `;
-            document.getElementById('action_row_' + id).after(wrap);
-        }
-
-        function submitReply(id) {
-            const input = document.getElementById('field_target_' + id);
-            const text = input.value.trim();
-            if(text === "") return;
-            const targetNode = locateNodeDeep(currentVideo.comments, id);
-            if(!targetNode) return;
-
-            if(!targetNode.replies) targetNode.replies = [];
-            targetNode.replies.push({
-                id: 'c_' + Date.now(), 
-                user: currentUser, 
-                text: text,
-                timeLabel: new Date().toLocaleString(),
-                likedBy: [], dislikedBy: [], replies: []
-            });
-            saveStateToDatabase(); renderComments();
-        }
-
-        function locateNodeDeep(arr, targetId) {
-            if(!arr) return null;
-            for (let node of arr) {
-                if (node.id === targetId) return node;
-                if (node.replies) { let found = locateNodeDeep(node.replies, targetId); if (found) return found; }
-            }
-            return null;
-        }
-
-        function toggleVote(type) {
+        async function toggleVote(type) {
             if (!currentVideo || !currentUser) return;
             if(!currentVideo.likedBy) currentVideo.likedBy = [];
             if(!currentVideo.dislikedBy) currentVideo.dislikedBy = [];
@@ -1428,13 +1000,38 @@
                     if (likedIndex > -1) currentVideo.likedBy.splice(likedIndex, 1);
                 }
             }
-            saveStateToDatabase(); updateVoteUI();
+
+            await db.collection('videos').doc(currentVideo.id).update({
+                likedBy: currentVideo.likedBy,
+                dislikedBy: currentVideo.dislikedBy
+            });
+            updateVoteUI();
         }
 
         function updateVoteUI() {
             if(!currentVideo) return;
             document.getElementById('likeCount').innerText = currentVideo.likedBy ? currentVideo.likedBy.length : 0;
             document.getElementById('dislikeCount').innerText = currentVideo.dislikedBy ? currentVideo.dislikedBy.length : 0;
+        }
+
+        async function submitComment() {
+            if(!currentVideo || !currentUser) return;
+            const input = document.getElementById('newCommentText');
+            const text = input.value.trim();
+            if(text === "") return;
+
+            if(!currentVideo.comments) currentVideo.comments = [];
+            currentVideo.comments.push({
+                id: 'c_' + Date.now(), 
+                user: currentUser, 
+                text: text,
+                timeLabel: new Date().toLocaleString(),
+                likedBy: [], dislikedBy: [], replies: []
+            });
+
+            await db.collection('videos').doc(currentVideo.id).update({ comments: currentVideo.comments });
+            renderComments(); 
+            input.value = '';
         }
 
         function compileTreeMarkup(nodes, depthLevel) {
@@ -1465,6 +1062,298 @@
         function renderComments() {
             if(!currentVideo) return;
             document.getElementById('commentTreeArea').innerHTML = compileTreeMarkup(currentVideo.comments, 0);
+        }
+
+        function toggleReplyForm(id) {
+            const wrapId = 'reply_box_wrapper_' + id;
+            const targetEl = document.getElementById(wrapId);
+            if(targetEl) return targetEl.remove();
+
+            const wrap = document.createElement('div');
+            wrap.id = wrapId;
+            wrap.className = 'indent-structural-layer';
+            wrap.innerHTML = `
+                <input type="text" id="field_target_${id}" style="width:50%; margin-top:4px;" placeholder="Reply...">
+                <button class="button" onclick="submitReply('${id}')">Send</button>
+            `;
+            document.getElementById('action_row_' + id).after(wrap);
+        }
+
+        async function submitReply(id) {
+            const input = document.getElementById('field_target_' + id);
+            const text = input.value.trim();
+            if(text === "") return;
+            const targetNode = locateNodeDeep(currentVideo.comments, id);
+            if(!targetNode) return;
+
+            if(!targetNode.replies) targetNode.replies = [];
+            targetNode.replies.push({
+                id: 'c_' + Date.now(), 
+                user: currentUser, 
+                text: text,
+                timeLabel: new Date().toLocaleString(),
+                likedBy: [], dislikedBy: [], replies: []
+            });
+
+            await db.collection('videos').doc(currentVideo.id).update({ comments: currentVideo.comments });
+            renderComments();
+        }
+
+        function locateNodeDeep(arr, targetId) {
+            if(!arr) return null;
+            for (let node of arr) {
+                if (node.id === targetId) return node;
+                if (node.replies) { let found = locateNodeDeep(node.replies, targetId); if (found) return found; }
+            }
+            return null;
+        }
+
+        async function renderSideQueue() {
+            const sideGrid = document.getElementById('sideQueueGrid');
+            if(!sideGrid) return;
+            sideGrid.innerHTML = '';
+            
+            const snapshot = await db.collection('videos').limit(6).get();
+            snapshot.forEach(doc => {
+                const video = doc.data();
+                if(video.id === currentVideo.id) return;
+
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => loadVideo(video.id);
+                card.innerHTML = `
+                    <div class="card-title" style="margin-top:0; font-size:12px;">
+                        [${(video.fileType||'video').toUpperCase()}] ${escapeHTML(video.title)}
+                    </div>
+                    <div class="card-metadata">@${escapeHTML(video.creator)} &bull; ${video.views || 0} views</div>
+                `;
+                sideGrid.appendChild(card);
+            });
+        }
+
+        function renderAviersGrid(filterQuery = "") {
+            const grid = document.getElementById('aviersGrid');
+            if(!grid) return;
+            grid.innerHTML = '';
+
+            const matches = appUsersState.registeredAviers.filter(name => !filterQuery || name.toLowerCase().includes(filterQuery));
+
+            matches.forEach(name => {
+                const subs = appUsersState.subscriptions[name] || [];
+                const card = document.createElement('div');
+                card.className = 'avier-card';
+                card.onclick = () => showChannelPage(name);
+                
+                let isSubbed = currentUser ? subs.includes(currentUser) : false;
+                const subBtnMarkup = (name !== currentUser) ? 
+                    `<button class="button" style="margin-top:10px; background:${isSubbed ? '#F0F0F0' : '#FFCCCC'};" 
+                        onclick="event.stopPropagation(); executeSubscriptionActionToggle('${name}');">
+                        ${isSubbed ? 'Called Avier' : 'Call Avier'}
+                     </button>` : `<div style="font-size:11px; margin-top:10px; color:#777777;">You</div>`;
+
+                card.innerHTML = `
+                    <div class="avier-thumb">${name.charAt(0).toUpperCase()}</div>
+                    <b style="font-size:14px;">${escapeHTML(name)}</b>
+                    <div class="card-metadata" style="margin-top:4px; font-weight: bold;">${subs.length} Aviers</div>
+                    ${subBtnMarkup}
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function executeSubscriptionActionToggle(targetChannel) {
+            if (!currentUser || !targetChannel || targetChannel === currentUser) return;
+            if (!appUsersState.subscriptions[targetChannel]) appUsersState.subscriptions[targetChannel] = [];
+            
+            const idx = appUsersState.subscriptions[targetChannel].indexOf(currentUser);
+            if (idx > -1) appUsersState.subscriptions[targetChannel].splice(idx, 1);
+            else appUsersState.subscriptions[targetChannel].push(currentUser);
+
+            saveUsersStateToFirestore();
+            if(!document.getElementById('aviersPage').classList.contains('hidden')) renderAviersGrid();
+            if(!document.getElementById('channelPage').classList.contains('hidden')) updateChannelPageSubView();
+            if(!document.getElementById('watchPage').classList.contains('hidden')) updateWatchPageSubButton();
+        }
+
+        function updateWatchPageSubButton() {
+            const btn = document.getElementById('watchPageSubBtn');
+            if (!currentVideo || currentVideo.creator === currentUser || !currentUser) return btn.classList.add('hidden');
+            btn.classList.remove('hidden');
+            const subList = appUsersState.subscriptions[currentVideo.creator] || [];
+            btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
+        }
+
+        function toggleChannelSubscriptionFromWatch() {
+            if (!currentVideo || !currentUser) return;
+            executeSubscriptionActionToggle(currentVideo.creator);
+        }
+
+        function toggleChannelSubscriptionDynamic() {
+            if(!currentUser || !targetBrowsingChannel) return;
+            executeSubscriptionActionToggle(targetBrowsingChannel);
+        }
+
+        function updateChannelPageSubView() {
+            if (!targetBrowsingChannel) return;
+            const subList = appUsersState.subscriptions[targetBrowsingChannel] || [];
+            document.getElementById('channelSubCountDisplay').innerText = `${subList.length} Aviers`;
+            const btn = document.getElementById('channelActionSubBtn');
+            btn.classList.toggle('hidden', targetBrowsingChannel === currentUser || !currentUser);
+            if (currentUser) {
+                btn.innerText = subList.includes(currentUser) ? "Called Avier" : "Call Aviers";
+            }
+        }
+
+        async function showChannelPage(channelOwnerName) {
+            targetBrowsingChannel = channelOwnerName;
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('watchPage').classList.add('hidden');
+            document.getElementById('uploadPage').classList.add('hidden');
+            document.getElementById('aviersPage').classList.add('hidden');
+            document.getElementById('channelPage').classList.remove('hidden');
+            document.getElementById('channelInlineEditBox').classList.add('hidden');
+
+            document.getElementById('channelNameDisplay').innerText = `${channelOwnerName}'s Channel`;
+            const joinDate = appUsersState.joinDates[channelOwnerName] || new Date().toLocaleDateString();
+            document.getElementById('channelJoinedDateDisplay').innerText = `Joined: ${joinDate}`;
+
+            updateChannelPageSubView();
+
+            const snapshot = await db.collection('videos').where('creator', '==', channelOwnerName).get();
+            let totalViews = 0, totalDownloads = 0, totalLikes = 0, totalDislikes = 0;
+
+            const channelGrid = document.getElementById('channelVideosGrid');
+            channelGrid.innerHTML = '';
+
+            snapshot.forEach(doc => {
+                const video = { id: doc.id, ...doc.data() };
+                totalViews += (video.views || 0);
+                totalDownloads += (video.downloads ? video.downloads.length : 0);
+                totalLikes += (video.likedBy ? video.likedBy.length : 0);
+                totalDislikes += (video.dislikedBy ? video.dislikedBy.length : 0);
+
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => loadVideo(video.id);
+
+                let managementButtons = '';
+                if (channelOwnerName === currentUser) {
+                    managementButtons = `
+                        <div id="ctrl_actions_${video.id}" style="margin-top:6px; display:flex; gap:5px;">
+                            <button class="button" onclick="openChannelInlineEditor('${video.id}', '${escapeHTML(video.title)}', '${escapeHTML(video.description || '')}', event)">Edit</button>
+                            <button class="button danger-btn" onclick="renderMakeSureGui('${video.id}', event)">Delete</button>
+                        </div>
+                        <div id="ctrl_confirm_${video.id}" class="confirm-banner hidden" onclick="event.stopPropagation();">
+                            <span>Are you sure?</span> 
+                            <button class="button danger-btn" style="padding:2px 6px; font-size:11px;" onclick="executeDeleteVideoRecord('${video.id}', event)">Yes</button>
+                            <button class="button" style="padding:2px 6px; font-size:11px;" onclick="cancelDeleteGui('${video.id}', event)">No</button>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="card-thumb">${(video.fileType||'video').toUpperCase()}</div>
+                    <div class="card-title">${escapeHTML(video.title)}</div>
+                    <div class="card-metadata">${video.views || 0} views &bull; <b style="color:#0000FF;">${video.downloads ? video.downloads.length : 0} dl</b></div>
+                    <div class="card-metadata" style="color: #444444; margin-top: 2px;">
+                        Likes: ${video.likedBy ? video.likedBy.length : 0} &bull; Dislikes: ${video.dislikedBy ? video.dislikedBy.length : 0}
+                    </div>
+                    ${managementButtons}
+                `;
+                channelGrid.appendChild(card);
+            });
+
+            document.getElementById('matrixTotalViews').innerText = totalViews;
+            document.getElementById('matrixTotalDownloads').innerText = totalDownloads;
+            document.getElementById('matrixTotalLikes').innerText = totalLikes;
+            document.getElementById('matrixTotalDislikes').innerText = totalDislikes;
+        }
+
+        function renderMakeSureGui(videoId, event) {
+            event.stopPropagation();
+            document.getElementById(`ctrl_actions_${videoId}`).classList.add('hidden');
+            document.getElementById(`ctrl_confirm_${videoId}`).classList.remove('hidden');
+        }
+
+        function cancelDeleteGui(videoId, event) {
+            event.stopPropagation();
+            document.getElementById(`ctrl_confirm_${videoId}`).classList.add('hidden');
+            document.getElementById(`ctrl_actions_${videoId}`).classList.remove('hidden');
+        }
+
+        async function executeDeleteVideoRecord(videoId, event) {
+            event.stopPropagation();
+            await db.collection('videos').doc(videoId).delete();
+            showChannelPage(targetBrowsingChannel);
+        }
+
+        function openChannelInlineEditor(videoId, currentTitle, currentDesc, event) {
+            event.stopPropagation();
+            const editBox = document.getElementById('channelInlineEditBox');
+            editBox.classList.remove('hidden');
+            document.getElementById('inlineEditVideoId').value = videoId;
+            document.getElementById('inlineEditTitle').value = currentTitle || '';
+            document.getElementById('inlineEditDesc').value = currentDesc || '';
+        }
+
+        async function saveChannelInlineMetadata() {
+            const id = document.getElementById('inlineEditVideoId').value;
+            const newTitle = document.getElementById('inlineEditTitle').value.trim();
+            const newDesc = document.getElementById('inlineEditDesc').value.trim();
+
+            if(newTitle) {
+                await db.collection('videos').doc(id).update({
+                    title: newTitle,
+                    description: newDesc
+                });
+            }
+            document.getElementById('channelInlineEditBox').classList.add('hidden');
+            showChannelPage(targetBrowsingChannel);
+        }
+
+        function showHomePage() {
+            document.getElementById('watchPage').classList.add('hidden');
+            document.getElementById('channelPage').classList.add('hidden');
+            document.getElementById('uploadPage').classList.add('hidden');
+            document.getElementById('aviersPage').classList.add('hidden');
+            document.getElementById('homePage').classList.remove('hidden');
+            fetchPaginatedVideos('first');
+        }
+
+        function showUploadPage() {
+            document.getElementById('watchPage').classList.add('hidden');
+            document.getElementById('channelPage').classList.add('hidden');
+            document.getElementById('aviersPage').classList.add('hidden');
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('uploadPage').classList.remove('hidden');
+        }
+
+        function showAviersPage() {
+            document.getElementById('watchPage').classList.add('hidden');
+            document.getElementById('channelPage').classList.add('hidden');
+            document.getElementById('uploadPage').classList.add('hidden');
+            document.getElementById('homePage').classList.add('hidden');
+            document.getElementById('aviersPage').classList.remove('hidden');
+            renderAviersGrid(document.getElementById('aviersSearchInput').value.toLowerCase().trim());
+        }
+
+        function showMyChannelPage() {
+            if (currentUser) showChannelPage(currentUser);
+        }
+
+        async function triggerDesktopFolderLink() {
+            try {
+                const rootHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                automaticWatchDirHandle = await rootHandle.getDirectoryHandle("avitube_watch_history", { create: true });
+                document.getElementById('directoryStatus').innerHTML = "Auto-Syncing (/avitube_watch_history)";
+            } catch (err) { console.error(err); }
+        }
+
+        function calculateNestedComments(arr) {
+            if(!arr) return 0;
+            let total = arr.length;
+            arr.forEach(c => { if(c.replies) total += calculateNestedComments(c.replies); });
+            return total;
         }
 
         function escapeHTML(str) {
