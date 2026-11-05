@@ -608,6 +608,8 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const storage = firebase.storage();
+        let selectedLocalFile = null;
 
         let currentUser = localStorage.getItem('avitube_logged_user') || null;
         let currentVideo = null;
@@ -837,71 +839,98 @@
         }
 
         function handleLocalFileSelected(input) {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                selectedLocalBlobUrl = URL.createObjectURL(file);
-                selectedLocalFileName = file.name;
-                
-                const titleField = document.getElementById('singleTitle');
-                if (!titleField.value) {
-                    titleField.value = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                }
-            }
+    if (input.files && input.files[0]) {
+        selectedLocalFile = input.files[0];
+
+        const titleField = document.getElementById('singleTitle');
+
+        if (!titleField.value) {
+            titleField.value = selectedLocalFile.name.substring(
+                0,
+                selectedLocalFile.name.lastIndexOf('.')
+            ) || selectedLocalFile.name;
+        }
+    }
+}
+
+async function processSingleUpload() {
+    if (!currentUser) return alert("Please log in.");
+
+    const fileUrl = document.getElementById('singleFileUrl').value.trim();
+    const customTitle = document.getElementById('singleTitle').value.trim();
+    const fileType = document.getElementById('singleFileType').value;
+    const desc = document.getElementById('singleDesc').value.trim();
+
+    if (!selectedLocalFile && !fileUrl)
+        return alert("Select a file or enter a URL.");
+
+    if (!customTitle)
+        return alert("Please enter a title.");
+
+    const btn = document.getElementById('singleSaveBtn');
+    const generatedId = 'vid_' + Date.now();
+
+    try {
+        btn.disabled = true;
+        btn.innerText = "Uploading to Firebase...";
+
+        let finalUrl = fileUrl;
+        let finalFileName = customTitle;
+
+        if (selectedLocalFile) {
+            const safeName = selectedLocalFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+            const fileRef = storage.ref().child(
+                'videos/' + generatedId + '/' + safeName
+            );
+
+            const upload = await fileRef.put(selectedLocalFile);
+
+            finalUrl = await upload.ref.getDownloadURL();
+            finalFileName = selectedLocalFile.name;
         }
 
-        async function processSingleUpload() {
-            if (!currentUser) return alert("Please log in to register a file link.");
-            
-            let fileUrl = document.getElementById('singleFileUrl').value.trim();
-            const customTitle = document.getElementById('singleTitle').value.trim();
-            const fileType = document.getElementById('singleFileType').value;
-            const desc = document.getElementById('singleDesc').value.trim();
-            
-            if (selectedLocalBlobUrl) {
-                fileUrl = selectedLocalBlobUrl;
-            }
+        btn.innerText = "Saving to Firestore...";
 
-            if (!fileUrl) return alert("Please provide a valid download link / URL or choose a local file.");
-            if (!customTitle) return alert("Please provide a title for this link entry.");
+        await db.collection('videos').doc(generatedId).set({
+            id: generatedId,
+            title: customTitle,
+            fileUrl: finalUrl,
+            fileName: finalFileName,
+            description: desc,
+            uploadTime: new Date().toLocaleString(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            creator: currentUser,
+            views: 0,
+            fileType: fileType,
+            likedBy: [],
+            dislikedBy: [],
+            downloads: [],
+            comments: []
+        });
 
-            const generatedId = 'vid_' + Date.now();
-            const btn = document.getElementById('singleSaveBtn');
+        selectedLocalFile = null;
 
-            try {
-                btn.disabled = true;
-                btn.innerText = "Saving to Firestore...";
+        document.getElementById('singleFileUrl').value = '';
+        document.getElementById('singleTitle').value = '';
+        document.getElementById('singleDesc').value = '';
+        document.getElementById('localVideoFileInput').value = '';
 
-                await db.collection('videos').doc(generatedId).set({
-                    id: generatedId,
-                    title: customTitle,
-                    fileUrl: fileUrl,
-                    fileName: selectedLocalFileName || customTitle,
-                    description: desc,
-                    uploadTime: new Date().toLocaleString(),
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    creator: currentUser,
-                    views: 0,
-                    fileType: fileType,
-                    likedBy: [], dislikedBy: [], downloads: [], comments: []
-                });
-                
-                btn.disabled = false;
-                btn.innerText = "Save Entry to Firestore";
-                document.getElementById('singleFileUrl').value = '';
-                document.getElementById('singleTitle').value = '';
-                document.getElementById('singleDesc').value = '';
-                document.getElementById('localVideoFileInput').value = '';
-                selectedLocalBlobUrl = null;
-                selectedLocalFileName = null;
-                showHomePage();
-            } catch (err) {
-                console.error("Firestore Document Error:", err);
-                alert("Firestore save failed: " + err.message);
-                btn.disabled = false;
-                btn.innerText = "Save Entry to Firestore";
-            }
-        }
+        btn.disabled = false;
+        btn.innerText = "Save Entry to Firestore";
 
+        alert("Video successfully uploaded to Firebase!");
+
+        showHomePage();
+
+    } catch (err) {
+        console.error(err);
+        alert("Upload failed: " + err.message);
+
+        btn.disabled = false;
+        btn.innerText = "Save Entry to Firestore";
+    }
+}
         async function loadVideo(id) {
             const docRef = db.collection('videos').doc(id);
             const doc = await docRef.get();
@@ -952,31 +981,59 @@
             `;
         }
 
-        async function executeDownloadAndStreamTrigger() {
-            if (!currentVideo || !currentVideo.fileUrl) return;
+async function executeDownloadAndStreamTrigger() {
+    if (!currentVideo || !currentVideo.id) {
+        return alert("Video information missing. Please reopen the video.");
+    }
 
-            // 1. Update counter in DB
-            if (!currentVideo.downloads) currentVideo.downloads = [];
-            if (!currentVideo.downloads.includes(currentUser)) {
-                currentVideo.downloads.push(currentUser);
-                await db.collection('videos').doc(currentVideo.id).update({ 
-                    downloads: currentVideo.downloads 
-                });
-                // Update UI count
-                document.getElementById('videoDownloadsDisplay').innerText = `${currentVideo.downloads.length} downloads`;
-            }
+    try {
+        // Always retrieve the latest saved video information
+        const doc = await db.collection('videos')
+            .doc(currentVideo.id)
+            .get();
 
-            // 2. Perform Download
-            const downloadLink = document.createElement('a');
-            downloadLink.href = currentVideo.fileUrl;
-            downloadLink.download = currentVideo.fileName || currentVideo.title || "video";
-            downloadLink.target = "_blank"; 
-            
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
+        if (!doc.exists) {
+            return alert("This video no longer exists.");
         }
 
+        const video = doc.data();
+
+        if (!video.fileUrl) {
+            return alert("No download URL found.");
+        }
+
+        // Open the permanent Firebase download URL
+        const link = document.createElement('a');
+        link.href = video.fileUrl;
+        link.download = video.fileName || video.title || "download";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        // Update download counter
+        const downloads = video.downloads || [];
+
+        if (currentUser && !downloads.includes(currentUser)) {
+            downloads.push(currentUser);
+
+            await db.collection('videos')
+                .doc(currentVideo.id)
+                .update({ downloads: downloads });
+
+            currentVideo.downloads = downloads;
+
+            document.getElementById('videoDownloadsDisplay').innerText =
+                downloads.length + " downloads";
+        }
+
+    } catch (err) {
+        console.error("Download error:", err);
+        alert("Download failed: " + err.message);
+    }
+}
         async function toggleVote(type) {
             if (!currentVideo || !currentUser) return;
             if(!currentVideo.likedBy) currentVideo.likedBy = [];
