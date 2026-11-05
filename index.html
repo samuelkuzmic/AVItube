@@ -981,65 +981,59 @@ async function processSingleUpload() {
             `;
         }
 
-
 async function executeDownloadAndStreamTrigger() {
     if (!currentVideo || !currentVideo.id) {
         return alert("Video information missing. Please reopen the video.");
     }
 
-    const fileUrl = currentVideo.fileUrl;
-
-    if (!fileUrl) {
-        return alert("No download URL found.");
-    }
-
-    // Validate the download URL
     try {
-        const parsedUrl = new URL(fileUrl);
+        // Always retrieve the latest saved video information
+        const doc = await db.collection('videos')
+            .doc(currentVideo.id)
+            .get();
 
-        if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
-            return alert("Invalid download URL.");
+        if (!doc.exists) {
+            return alert("This video no longer exists.");
         }
+
+        const video = doc.data();
+
+        if (!video.fileUrl) {
+            return alert("No download URL found.");
+        }
+
+        // Open the permanent Firebase download URL
+        const link = document.createElement('a');
+        link.href = video.fileUrl;
+        link.download = video.fileName || video.title || "download";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        // Update download counter
+        const downloads = video.downloads || [];
+
+        if (currentUser && !downloads.includes(currentUser)) {
+            downloads.push(currentUser);
+
+            await db.collection('videos')
+                .doc(currentVideo.id)
+                .update({ downloads: downloads });
+
+            currentVideo.downloads = downloads;
+
+            document.getElementById('videoDownloadsDisplay').innerText =
+                downloads.length + " downloads";
+        }
+
     } catch (err) {
-        return alert("The saved download URL is invalid.");
-    }
-
-    // OPEN THE DOWNLOAD IMMEDIATELY
-    // Do this before any asynchronous Firebase requests.
-    const link = document.createElement("a");
-
-    link.href = fileUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    // Update download count separately
-    if (currentUser) {
-        try {
-            const videoRef = db.collection("videos").doc(currentVideo.id);
-
-            await videoRef.update({
-                downloads: firebase.firestore.FieldValue.arrayUnion(currentUser)
-            });
-
-            const updatedDoc = await videoRef.get();
-
-            if (updatedDoc.exists) {
-                currentVideo.downloads = updatedDoc.data().downloads || [];
-
-                document.getElementById("videoDownloadsDisplay").innerText =
-                    currentVideo.downloads.length + " downloads";
-            }
-
-        } catch (err) {
-            console.error("Download counter error:", err);
-        }
+        console.error("Download error:", err);
+        alert("Download failed: " + err.message);
     }
 }
-
         async function toggleVote(type) {
             if (!currentVideo || !currentUser) return;
             if(!currentVideo.likedBy) currentVideo.likedBy = [];
